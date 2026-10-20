@@ -165,33 +165,4 @@ export default new Hono()
       return c.json({ error }, { status: 401 })
     }
   })
-  /**
-   * Used by the opencode CLI to check if the GitHub app is installed
-   */
-  .get("/get_github_app_installation", async (c) => {
-    const owner = c.req.query("owner")
-    const repo = c.req.query("repo")
-
-    const auth = createAppAuth({
-      appId: Resource.GITHUB_APP_ID.value,
-      privateKey: Resource.GITHUB_APP_PRIVATE_KEY.value,
-    })
-    const appAuth = await auth({ type: "app" })
-
-    // Lookup installation
-    const octokit = new Octokit({ auth: appAuth.token })
-    let installation
-    try {
-      const ret = await octokit.apps.getRepoInstallation({ owner, repo })
-      installation = ret.data
-    } catch (err) {
-      if (err instanceof Error && err.message.includes("Not Found")) {
-        // not installed
-      } else {
-        throw err
-      }
-    }
-
-    return c.json({ installation })
-  })
   .all("*", (c) => c.text("Not Found", 404))
