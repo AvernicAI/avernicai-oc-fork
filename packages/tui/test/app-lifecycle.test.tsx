@@ -1765,12 +1765,9 @@ test("free usage limit opens OpenCode Go once, lists next steps and hands the pr
   setup.mockInput.pressEscape()
   await setup.waitForFrame((frame) => !frame.includes("Connect OpenCode Go"))
   const frame = setup.captureCharFrame()
-  expect(frame).toContain("You've used today's free messages · resets at")
-  expect(frame).toMatch(/^ +Upgrade to OpenCode Go → \/connect *$/m)
-  expect(frame).toMatch(/^ +Switch model → \/models *$/m)
+  expect(frame).toContain("You've used today's free messages. They reset at")
+  expect(frame).toContain("Upgrade to OpenCode Go → /connect · Switch model → /models")
   expect(frame).not.toContain("Error:")
-  // The turn never ran, so it has no agent, model and duration footer; only the composer names the agent.
-  expect(frame).not.toMatch(/^ +Build\b/m)
   // The prompt shows once in the transcript and once more back in the composer.
   await setup.waitForFrame((frame) => frame.split("Refactor the parser").length === 3)
 

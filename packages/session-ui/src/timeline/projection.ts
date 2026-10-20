@@ -640,16 +640,15 @@ export namespace Timeline {
 }
 
 function freeLimit(
-  message: Pick<SessionMessageAssistant, "id" | "error"> & { time: { created: number; completed?: number } },
+  message: Pick<SessionMessageAssistant, "error"> & { time: { created: number; completed?: number } },
 ) {
   if (message.error?.type !== "provider.free-limit") return {}
   const delay = message.error.retryAfterMs
 
-  if (delay === undefined) return { kind: "free-limit" as const, messageID: message.id }
+  if (delay === undefined) return { kind: "free-limit" as const }
 
   return {
     kind: "free-limit" as const,
-    messageID: message.id,
     resetAt: (message.time.completed ?? message.time.created) + delay,
   }
 }

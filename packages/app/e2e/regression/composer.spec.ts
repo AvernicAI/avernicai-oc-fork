@@ -4,7 +4,9 @@ import { openDraft, openSession } from "../utils/workspace"
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] })
 
-test("the free usage limit opens a dialog once, then offers ways forward inline", async ({ page }) => {
+test("the free usage limit opens the Go dialog once, leaves a readable notice, and restores the prompt", async ({
+  page,
+}) => {
   const sessionID = "ses_free_limit"
   const model = { id: "big-pickle", providerID: "opencode" }
 
@@ -28,7 +30,7 @@ test("the free usage limit opens a dialog once, then offers ways forward inline"
     retryAfterMs: 3_600_000,
   }
 
-  const durable = (seq: number) => ({ aggregateID: sessionID, seq, version: 1 })
+  const durable = (seq: number) => ({ aggregateID: sessionID, seq, version: 1 as const })
   const location = { directory: view.directory }
 
   await view.push([
@@ -44,16 +46,12 @@ test("the free usage limit opens a dialog once, then offers ways forward inline"
 
   const upsell = page.getByRole("dialog", { name: "Free limit reached" })
   await expect(upsell).toContainText("Your free messages reset at")
-  // The modal hides the transcript from role queries, so the quiet line is checked by its text.
   await expect(page.getByText(/^You've used today's free messages\. They reset at /)).toBeVisible()
-  await expect(page.getByText("Upgrade to Go", { exact: true })).toHaveCount(0)
   await expect(view.editor).toHaveText("Refactor the parser")
   await expect(page.getByText("Free usage limit reached.")).toHaveCount(0)
   await upsell.getByRole("button", { name: "Don't show again", exact: true }).click()
   await expect(upsell).toHaveCount(0)
-  // Once the dialog is gone, the transcript offers the ways forward itself.
-  const notice = page.getByRole("status").filter({ hasText: "You've used today's free messages" })
-  await expect(notice.getByRole("button", { name: "Upgrade to Go", exact: true })).toBeVisible()
+  await expect(page.getByRole("status").filter({ hasText: "You've used today's free messages." })).toBeVisible()
 
   await view.push([
     {
@@ -74,10 +72,8 @@ test("the free usage limit opens a dialog once, then offers ways forward inline"
     },
   ])
 
-  await expect(notice.getByRole("button", { name: "Upgrade to Go", exact: true })).toBeVisible()
+  await expect(page.getByRole("status").filter({ hasText: "You've used today's free messages." })).toHaveCount(2)
   await expect(page.getByRole("dialog")).toHaveCount(0)
-  await notice.getByRole("button", { name: "Use another model", exact: true }).click()
-  await expect(page.getByRole("dialog", { name: "Select model" })).toBeVisible()
 })
 
 test("a catalog refresh cannot replace an existing session's model", async ({ page }) => {

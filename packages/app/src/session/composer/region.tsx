@@ -33,7 +33,6 @@ import { resolveSessionComposerSelection } from "./selection"
 import { createSessionRequestModel } from "../requests/model"
 import type { Region } from "@/runtime/extension/panels"
 import { SessionLocationMissing } from "./location-missing"
-import { showGoConnect } from "../usage-exceeded-dialogs"
 
 export function createActiveSessionRegion(input: {
   session: SessionModel
@@ -41,7 +40,6 @@ export function createActiveSessionRegion(input: {
   timeline: SessionTimelineInteraction
   region: Region
   visible: Accessor<boolean>
-  freeLimitDialogOpen: (messageID: string) => boolean
 }) {
   const command = useCommand()
   const data = useData()
@@ -192,13 +190,6 @@ export function createActiveSessionRegion(input: {
 
   const revertMessage: NonNullable<SessionUserActions["revert"]> = ({ messageID }) => revert.to(messageID)
 
-  const freeLimit: NonNullable<SessionUserActions["freeLimit"]> = {
-    upgrade: () => showGoConnect(dialog, location().directory),
-    chooseModel: () => command.trigger("model.choose"),
-    connectProvider: () => command.trigger("provider.connect"),
-    dialogOpen: input.freeLimitDialogOpen,
-  }
-
   // The free allowance stops a prompt after it was sent. Hand its text back so switching models and resending is one
   // step, unless the user has already started typing something else.
   onCleanup(
@@ -303,7 +294,6 @@ export function createActiveSessionRegion(input: {
           return pendingSteer
         },
         openAttachment,
-        freeLimit,
       } satisfies SessionUserActions,
     },
     requests: state,

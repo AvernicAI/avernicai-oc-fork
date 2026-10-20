@@ -1,7 +1,7 @@
 import { useWorkspaceLocation } from "@/workspaces/location"
 import { Persist, persisted } from "@/runtime/persistence/storage"
 import type { SessionStatus, SessionStepFailed } from "@opencode/client/promise"
-import { createSignal, onCleanup } from "solid-js"
+import { onCleanup } from "solid-js"
 import { Schema } from "effect"
 import { Persistence } from "@/runtime/persistence/schema"
 import { useSessionLayout } from "./session-layout"
@@ -52,22 +52,11 @@ function goUpsellKeys(status: SessionStatus) {
   }
 }
 
-/** Opens the connect dialog on OpenCode Go. */
-export function showGoConnect(dialog: ReturnType<typeof useDialog>, directory: string) {
-  void import("@/providers/connect/dialog").then((connect) => {
-    const controller = connect.useProviderConnectController()
-    controller.select("opencode-go")
-    void dialog.show(() => <connect.DialogConnectProvider directory={directory} controller={controller} />)
-  })
-}
-
 export function useUsageExceededDialogs() {
   const sdk = useWorkspaceLocation()
   const dialog = useDialog()
   const { params } = useSessionLayout()
-  const i18n = useI18n()
-  // The assistant message whose free usage limit the open dialog is explaining.
-  const [explaining, setExplaining] = createSignal<string>()
+  const { t, tDynamic, locale } = useI18n()
 
   const [goUpsellState, setGoUpsellState] = persisted(Persist.global("go-upsell"), GoUpsellState, {
     [GO_UPSELL_FREE_TIER_LAST_SEEN_AT]: null,
@@ -84,9 +73,50 @@ export function useUsageExceededDialogs() {
 
   onCleanup(
     sdk().event.on("session.step.failed", (evt) => {
-      if (evt.data.sessionID !== params.id) return
+      if (evt.data.sessionID !== params.id || dialog.active) return
+      const error = evt.data.error
 
-      if (!isChatGPTUsageLimit(evt.data.error) || dialog.active) return
+      if (error.type === "provider.free-limit") {
+        const seen = goUpsellState[GO_UPSELL_FREE_TIER_LAST_SEEN_AT]
+
+        if (seen && Date.now() - seen < GO_UPSELL_WINDOW) return
+
+        if (goUpsellState[GO_UPSELL_FREE_TIER_DONT_SHOW]) return
+
+        // Counted when shown, so dismissing with Escape or the backdrop also waits out the window.
+        setGoUpsellState(GO_UPSELL_FREE_TIER_LAST_SEEN_AT, Date.now())
+
+        const reset =
+          error.retryAfterMs === undefined
+            ? undefined
+            : new Intl.DateTimeFormat(locale(), { timeStyle: "short" }).format(Date.now() + error.retryAfterMs)
+
+        dialog.show(() => (
+          <DialogUsageExceeded
+            title={t("dialog.usageExceeded.freeTier.title")}
+            description={
+              reset
+                ? t("dialog.usageExceeded.freeTier.descriptionReset", { time: reset })
+                : t("dialog.usageExceeded.freeTier.description")
+            }
+            actionLabel={t("dialog.usageExceeded.freeTier.actionLabel")}
+            link={GO_URL}
+            onClose={(dontShowAgain) => {
+              if (dontShowAgain) setGoUpsellState(GO_UPSELL_FREE_TIER_DONT_SHOW, Date.now())
+              else {
+                void import("@/providers/connect/dialog").then((x) => {
+                  const controller = x.useProviderConnectController()
+                  controller.select("opencode-go")
+                  void dialog.show(() => <x.DialogConnectProvider directory={sdk().directory} controller={controller} />)
+                })
+              }
+            }}
+          />
+        ))
+        return
+      }
+
+      if (!isChatGPTUsageLimit(error)) return
 
       if (chatgptUsageLimit.lastSeenAt && Date.now() - chatgptUsageLimit.lastSeenAt < CHATGPT_USAGE_LIMIT_WINDOW) return
 
@@ -95,50 +125,6 @@ export function useUsageExceededDialogs() {
         setChatGPTUsageLimit("lastSeenAt", Date.now())
         dialog.show(() => <usage.DialogChatGPTUsageLimit />)
       })
-    }),
-  )
-
-  onCleanup(
-    sdk().event.on("session.step.failed", (evt) => {
-      if (evt.data.sessionID !== params.id) return
-      const error = evt.data.error
-
-      if (error.type !== "provider.free-limit" || dialog.active) return
-
-      const seen = goUpsellState[GO_UPSELL_FREE_TIER_LAST_SEEN_AT]
-
-      if (seen && Date.now() - seen < GO_UPSELL_WINDOW) return
-
-      if (goUpsellState[GO_UPSELL_FREE_TIER_DONT_SHOW]) return
-
-      // Counted when shown, so dismissing with Escape or the backdrop also waits out the window.
-      setGoUpsellState(GO_UPSELL_FREE_TIER_LAST_SEEN_AT, Date.now())
-      setExplaining(evt.data.assistantMessageID)
-
-      const reset =
-        error.retryAfterMs === undefined
-          ? undefined
-          : new Intl.DateTimeFormat(i18n.locale(), { timeStyle: "short" }).format(Date.now() + error.retryAfterMs)
-
-      dialog.show(
-        () => (
-          <DialogUsageExceeded
-            title={i18n.t("dialog.usageExceeded.freeTier.title")}
-            description={
-              reset
-                ? i18n.t("dialog.usageExceeded.freeTier.descriptionReset", { time: reset })
-                : i18n.t("dialog.usageExceeded.freeTier.description")
-            }
-            actionLabel={i18n.t("dialog.usageExceeded.freeTier.actionLabel")}
-            link={GO_URL}
-            onClose={(dontShowAgain) => {
-              if (dontShowAgain) setGoUpsellState(GO_UPSELL_FREE_TIER_DONT_SHOW, Date.now())
-              else showGoConnect(dialog, sdk().directory)
-            }}
-          />
-        ),
-        () => setExplaining(undefined),
-      )
     }),
   )
 
@@ -163,24 +149,21 @@ export function useUsageExceededDialogs() {
 
       if (goUpsellState[keys.dontShow]) return
 
-      dialog.show(() => (
-        <DialogUsageExceeded
-          title={i18n.tDynamic("dialog.usageExceeded.accountRateLimit.title", action.title)}
-          description={i18n.tDynamic("dialog.usageExceeded.accountRateLimit.description", action.message)}
-          actionLabel={i18n.tDynamic("dialog.usageExceeded.accountRateLimit.actionLabel", action.label)}
-          link={action.link}
-          onClose={(dontShowAgain) => {
-            setGoUpsellState(keys.lastSeenAt, Date.now())
+      if (action.reason === "account_rate_limit") {
+        dialog.show(() => (
+          <DialogUsageExceeded
+            title={tDynamic("dialog.usageExceeded.accountRateLimit.title", action.title)}
+            description={tDynamic("dialog.usageExceeded.accountRateLimit.description", action.message)}
+            actionLabel={tDynamic("dialog.usageExceeded.accountRateLimit.actionLabel", action.label)}
+            link={action.link}
+            onClose={(dontShowAgain) => {
+              setGoUpsellState(keys.lastSeenAt, Date.now())
 
-            if (dontShowAgain) setGoUpsellState(keys.dontShow, Date.now())
-          }}
-        />
-      ))
+              if (dontShowAgain) setGoUpsellState(keys.dontShow, Date.now())
+            }}
+          />
+        ))
+      }
     }),
   )
-
-  return {
-    /** Whether the free usage limit dialog is open over this failed step. */
-    freeLimitDialogOpen: (messageID: string) => explaining() === messageID,
-  }
 }

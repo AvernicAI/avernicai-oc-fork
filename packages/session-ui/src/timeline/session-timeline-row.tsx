@@ -30,7 +30,6 @@ import { ToolRegistry, type ContextGroupPart } from "../tools/tool-renderer"
 import { GenericTool } from "../components/basic-tool"
 import { SessionRetry } from "../components/session-retry"
 import { SessionError } from "../components/session-error"
-import { SessionFreeLimit } from "../components/session-free-limit"
 import { timelineCategory, type TimelineDetail } from "./detail"
 import { currentToolFailed } from "../message/current-tool-state"
 import {
@@ -985,24 +984,13 @@ export function createSessionTimelineRowRenderer(input: {
       }
 
       const status = createMemo(() => {
-        const assistant = (
+        const retry = (
           input.projection.assistantMessagesByParent().get(current().userMessageID) ?? emptyAssistantMessages
-        ).at(-1)
+        ).at(-1)?.retry
 
-        const retry = assistant?.retry
+        if (!retry) return input.status()
 
-        if (!assistant || !retry) return input.status()
-
-        const providerID = assistant.model.providerID
-
-        const message =
-          retry.error.type === "provider.rate-limit"
-            ? i18n.t("ui.sessionTurn.retry.rateLimited", {
-                provider: data.store.provider?.all?.get(providerID)?.name ?? providerID,
-              })
-            : retry.error.message
-
-        return { type: "retry" as const, attempt: retry.attempt, message, next: retry.at }
+        return { type: "retry" as const, attempt: retry.attempt, message: retry.error.message, next: retry.at }
       })
 
       return (
@@ -1022,19 +1010,31 @@ export function createSessionTimelineRowRenderer(input: {
       return value
     }
 
+    const freeLimit = createMemo(() => {
+      if (current().kind !== "free-limit") return
+      const at = current().resetAt
+
+      if (at === undefined) return i18n.t("ui.sessionTurn.freeLimit.title")
+
+      const time = new Intl.DateTimeFormat(
+        i18n.locale(),
+        at - Date.now() < 86_400_000 ? { timeStyle: "short" } : { dateStyle: "medium", timeStyle: "short" },
+      ).format(at)
+
+      return i18n.t("ui.sessionTurn.freeLimit.lineReset", { time })
+    })
+
     return (
       <Frame row={current()}>
         <div data-slot="session-turn-message-container" class={`w-full ${padding()}`}>
-          <Show
-            when={current().kind === "free-limit" && input.actions?.freeLimit}
-            fallback={<SessionError message={current().text} />}
-          >
-            {(actions) => (
-              <SessionFreeLimit
-                resetAt={current().resetAt}
-                quiet={actions().dialogOpen(current().messageID ?? "")}
-                actions={actions()}
-              />
+          <Show when={freeLimit()} fallback={<SessionError message={current().text} />}>
+            {(text) => (
+              <div
+                role="status"
+                class="text-[13px] font-[440] leading-text-compact tracking-[-0.04px] text-v2-text-text-muted"
+              >
+                {text()}
+              </div>
             )}
           </Show>
         </div>

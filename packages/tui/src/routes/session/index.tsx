@@ -395,17 +395,6 @@ export function Session(props: {
     seeded = true
     r.set(route.prompt)
   }
-  // The free allowance stops a prompt after it was sent. Hand its text back so switching models and resending is one
-  // step, unless something else is already being typed.
-  onCleanup(
-    data.on("session.step.failed", (event) => {
-      const current = prompt()
-      if (event.data.sessionID !== route.sessionID || event.data.error.type !== "provider.free-limit") return
-      if (!current || current.current.text.trim()) return
-      const message = messages().findLast((item) => item.type === "user")
-      if (message?.type === "user") current.set({ ...projectedPromptInput(message), pasted: [] })
-    }),
-  )
 
   /** Runs after layout has settled (two frames), unless the transcript was torn down. */
   const afterLayout = (continuation: () => void) => {
@@ -640,10 +629,15 @@ export function Session(props: {
   })
   const dialog = useDialog()
   const [goUpsell, updateGoUpsell] = useStorage().store<{ lastSeenAt?: number }>("go-upsell", { initial: {} })
-  // The first free usage limit in a day opens the connect dialog on OpenCode Go; later ones only show the notice.
+  // Restore the prompt when the free allowance stops it, and open the OpenCode Go connect dialog on the first hit in a day.
   onCleanup(
     data.on("session.step.failed", (event) => {
       if (event.data.sessionID !== route.sessionID || event.data.error.type !== "provider.free-limit") return
+      const current = prompt()
+      if (current && !current.current.text.trim()) {
+        const message = messages().findLast((item) => item.type === "user")
+        if (message?.type === "user") current.set({ ...projectedPromptInput(message), pasted: [] })
+      }
       if (dialog.stack.length > 0) return
       if (goUpsell.lastSeenAt !== undefined && Date.now() - goUpsell.lastSeenAt < 86_400_000) return
       void updateGoUpsell((draft) => {
@@ -1942,8 +1936,6 @@ function AssistantFooter(props: { message: SessionMessageAssistant }) {
   )
   const interrupted = createMemo(() => props.message.error?.message === "Step interrupted")
   const freeLimit = createMemo(() => props.message.error?.type === "provider.free-limit")
-  // A step the free usage limit stopped before it produced anything has no agent, model or duration worth showing.
-  const unrun = createMemo(() => freeLimit() && props.message.content.length === 0)
   return (
     <>
       <Show when={props.message.error && !interrupted() && !props.message.retry}>
@@ -1958,28 +1950,26 @@ function AssistantFooter(props: { message: SessionMessageAssistant }) {
           <FreeLimitNotice message={props.message} />
         </Show>
       </Show>
-      <AssistantRetry retry={props.message.retry} providerID={props.message.model.providerID} />
-      <Show when={!unrun()}>
-        <box paddingLeft={3} marginTop={props.message.retry || (props.message.error && !interrupted()) ? 1 : 0}>
-          <text>
-            <span style={{ fg: props.message.error ? theme.text.muted : local.agent.color(props.message.agent) }}>
-              {Locale.titlecase(props.message.agent)}
-            </span>
-            <Show when={ctx.terminal.width >= 28}>
-              <span style={{ fg: theme.text.muted }}> · {model()}</span>
-            </Show>
-            <Show when={duration() && (ctx.terminal.width < 28 || ctx.terminal.width >= 36)}>
-              <span style={{ fg: theme.text.muted }}> · {Locale.duration(duration())}</span>
-            </Show>
-            <Show when={config.data.session.tps && tokensPerSecond()}>
-              {(value) => <span style={{ fg: theme.text.muted }}> · {value().toFixed(1)} tok/s</span>}
-            </Show>
-            <Show when={interrupted()}>
-              <span style={{ fg: theme.text.muted }}> · interrupted</span>
-            </Show>
-          </text>
-        </box>
-      </Show>
+      <AssistantRetry retry={props.message.retry} />
+      <box paddingLeft={3} marginTop={props.message.retry || (props.message.error && !interrupted()) ? 1 : 0}>
+        <text>
+          <span style={{ fg: props.message.error ? theme.text.muted : local.agent.color(props.message.agent) }}>
+            {Locale.titlecase(props.message.agent)}
+          </span>
+          <Show when={ctx.terminal.width >= 28}>
+            <span style={{ fg: theme.text.muted }}> · {model()}</span>
+          </Show>
+          <Show when={duration() && (ctx.terminal.width < 28 || ctx.terminal.width >= 36)}>
+            <span style={{ fg: theme.text.muted }}> · {Locale.duration(duration())}</span>
+          </Show>
+          <Show when={config.data.session.tps && tokensPerSecond()}>
+            {(value) => <span style={{ fg: theme.text.muted }}> · {value().toFixed(1)} tok/s</span>}
+          </Show>
+          <Show when={interrupted()}>
+            <span style={{ fg: theme.text.muted }}> · interrupted</span>
+          </Show>
+        </text>
+      </box>
     </>
   )
 }
@@ -2429,56 +2419,29 @@ function QueuedPromptDock(props: { prompts: { id: string; text: string }[]; onOp
   )
 }
 
-// OpenCode's free daily allowance ran out. An expected limit, so it reads as next steps rather than an error. The prompt
-// keeps focus for the restored text, so each option is a click or a command to type rather than a key binding.
 function FreeLimitNotice(props: { message: SessionMessageAssistant }) {
   const theme = useTheme()
-  const keymap = Keymap.use()
   const reset = createMemo(() => {
     const delay = props.message.error?.retryAfterMs
     if (delay === undefined) return
     const at = (props.message.time.completed ?? props.message.time.created) + delay
-    // The allowance resets within a day; anything further out needs the date too.
     return at - Date.now() < 86_400_000 ? Locale.time(at) : Locale.datetime(at)
   })
   return (
     <box paddingLeft={3} flexDirection="column">
-      <text fg={theme.text.base}>
-        <span style={{ attributes: TextAttributes.BOLD }}>You've used today's free messages</span>
-        <Show when={reset()}>{(time) => <span style={{ fg: theme.text.muted }}> · resets at {time()}</span>}</Show>
+      <text fg={theme.text.muted}>
+        You've used today's free messages.{reset() ? ` They reset at ${reset()}.` : ""}
       </text>
-      <For
-        each={[
-          { label: "Upgrade to OpenCode Go", command: "provider.connect", slash: "/connect" },
-          { label: "Switch model", command: "model.list", slash: "/models" },
-        ]}
-      >
-        {(option) => (
-          <box onMouseUp={() => keymap.dispatch(option.command)}>
-            <text fg={theme.text.muted}>
-              {option.label} → <span style={{ fg: theme.text.base }}>{option.slash}</span>
-            </text>
-          </box>
-        )}
-      </For>
+      <text fg={theme.text.muted}>
+        Upgrade to OpenCode Go → <span style={{ fg: theme.text.base }}>/connect</span> · Switch model →{" "}
+        <span style={{ fg: theme.text.base }}>/models</span>
+      </text>
     </box>
   )
 }
 
-function AssistantRetry(props: { retry: SessionMessageAssistant["retry"]; providerID: string }) {
+function AssistantRetry(props: { retry: SessionMessageAssistant["retry"] }) {
   const theme = useTheme()
-  const ctx = use()
-  const data = useData()
-  const reason = createMemo(() => {
-    const retry = props.retry
-    if (!retry) return ""
-    if (retry.error.type !== "provider.rate-limit") return retry.error.message
-    const location = data.session.get(ctx.sessionID)?.location
-    const provider = location
-      ? data.location.provider.list(location)?.find((item) => item.id === props.providerID)?.name
-      : undefined
-    return `Rate limited by ${provider ?? props.providerID}`
-  })
   const [seconds, setSeconds] = createSignal(0)
   createEffect(() => {
     const at = props.retry?.at
@@ -2495,7 +2458,8 @@ function AssistantRetry(props: { retry: SessionMessageAssistant["retry"]; provid
       {(retry) => (
         <box paddingLeft={3}>
           <text fg={theme.text.feedback.warning.base}>
-            ⚠ {seconds() > 0 ? `Retrying in ${seconds()}s` : "Retry due"} · attempt {retry().attempt} · {reason()}
+            ⚠ {seconds() > 0 ? `Retrying in ${seconds()}s` : "Retry due"} · attempt {retry().attempt} ·{" "}
+            {retry().error.message}
           </text>
         </box>
       )}

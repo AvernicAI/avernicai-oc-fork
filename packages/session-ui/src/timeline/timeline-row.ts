@@ -58,14 +58,13 @@ export namespace TimelineRow {
   }> {}
 
   /**
-   * `free-limit` marks OpenCode Zen's daily free allowance running out: `messageID` is the message that records the
-   * failure and `resetAt` is when the allowance comes back, if known.
+   * `free-limit` marks OpenCode Zen's daily free allowance running out; `resetAt` is when the allowance comes back, if
+   * known.
    */
   export class Error extends Data.TaggedClass("Error")<{
     userMessageID: string
     text: string
     kind?: "free-limit"
-    messageID?: string
     resetAt?: number
   }> {}
 
@@ -149,7 +148,7 @@ export type TimelineRowMap = {
   }
   Thinking: { userMessageID: string; ref: PartRef }
   Retry: { userMessageID: string }
-  Error: { userMessageID: string; text: string; kind?: "free-limit"; messageID?: string; resetAt?: number }
+  Error: { userMessageID: string; text: string; kind?: "free-limit"; resetAt?: number }
   CompactionQueued: { userMessageID: string; inboxID: string }
   TurnDiff: { userMessageID: string; messageID: string; from: string; files: readonly string[] }
   Activity: { userMessageID: string }
