@@ -124,6 +124,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
     updateOverflow()
     // Typing and width changes both resize the editor, so it is the only element that needs watching.
     const scrollObserver = new ResizeObserver(updateScroll)
+
     if (editor) scrollObserver.observe(editor)
     onCleanup(() => {
       observer.disconnect()
@@ -262,7 +263,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
             spellcheck={state.mode === "normal"}
             // @ts-expect-error
             autocomplete="off"
-            class="relative z-10 block min-h-[60px] w-full whitespace-pre-wrap bg-transparent px-4 pt-4 pb-2 text-[13px] font-[440] leading-5 text-v2-text-text-base focus:outline-none [&_[data-mention=file]]:text-syntax-property [&_[data-mention=agent]]:text-syntax-type [&_[data-mention=reference]]:text-syntax-keyword"
+            class="relative z-10 block min-h-[60px] w-full whitespace-pre-wrap bg-transparent px-3 pt-4 pb-2 text-[13px] font-[440] leading-5 text-v2-text-text-base focus:outline-none [&_[data-mention=file]]:text-syntax-property [&_[data-mention=agent]]:text-syntax-type [&_[data-mention=reference]]:text-syntax-keyword"
             classList={{ "font-mono! tracking-[-0.04px]": state.mode === "shell", "opacity-50": props.disabled }}
             style={{
               "unicode-bidi": state.mode === "normal" ? "plaintext" : undefined,
@@ -318,7 +319,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
           <Show when={!props.controller.value()}>
             <div
               dir={state.mode === "normal" ? "auto" : "ltr"}
-              class="pointer-events-none absolute inset-x-0 top-0 px-4 pt-4 text-[13px] font-[440] leading-5 text-v2-text-text-faint"
+              class="pointer-events-none absolute inset-x-0 top-0 px-3 pt-4 text-[13px] font-[440] leading-5 text-v2-text-text-faint"
               classList={{ "font-mono! tracking-[-0.04px]": state.mode === "shell" }}
               style={{ "unicode-bidi": state.mode === "normal" ? "plaintext" : undefined, "text-align": "start" }}
             >
@@ -330,7 +331,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
           </Show>
         </ScrollView>
 
-        <div class="flex h-11 items-center px-2">
+        <div class="flex h-11 items-center ps-1.5 pe-3">
           <div
             class="flex shrink-0 items-center"
             aria-hidden={state.mode === "shell"}

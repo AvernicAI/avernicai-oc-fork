@@ -114,7 +114,7 @@ function SessionQueueRow(props: { queue: SessionQueueView; id: string; index: nu
         <div
           ref={sortable.ref}
           data-component="session-queue-row"
-          class="group/queue-row flex h-8 shrink-0 items-center justify-between gap-2 rounded-md py-1 ps-1 pe-2"
+          class="group/queue-row flex h-8 shrink-0 items-center justify-between gap-2 rounded-md py-1 ps-0.5 pe-2"
           classList={{
             "bg-v2-overlay-simple-overlay-hover": editing(),
             "opacity-60": sortable.isDragSource(),
