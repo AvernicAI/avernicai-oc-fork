@@ -14,13 +14,14 @@ Use for full-size image inspection; keep images optimized.
 - Optional: \`alt\` text, and \`origin\`, the image on the page that the preview grows out of and shrinks back into.
 
 ### Variants and states
-- Single layout with zoom controls and a close action.
+- Single layout: the image fills the window without a panel, with zoom controls and a close action in one strip under it.
 
 ### Behavior
 - Intended to be used via \`useDialog().show\`.
 - With an \`origin\`, the image flies from its place on the page to the preview while the page dims, and back on close.
 - Pinch or Cmd/Ctrl + wheel zooms at the cursor; wheel and drag pan while zoomed.
 - Double-click toggles between fit and 100%; Cmd/Ctrl + =, - and 0 zoom in, out and to fit.
+- A click on the backdrop around the image closes it, unless it ends a pan.
 
 ### Accessibility
 - Uses localized aria-label for close button.

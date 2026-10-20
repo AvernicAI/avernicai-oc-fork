@@ -2,9 +2,8 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* Only the open preview takes clicks, so nothing left on screen while it closes blocks the page. */
+  pointer-events: none;
   --image-preview-shadow:
     0 15px 45px 0 rgba(19, 16, 16, 0.35), 0 3.35px 10.051px 0 rgba(19, 16, 16, 0.25),
     0 0.998px 2.993px 0 rgba(19, 16, 16, 0.2);
@@ -17,14 +16,12 @@
     pointer-events: none;
   }
 
-  /* While the image flies, the panel's surface flies with it, from the image's place on the page to the panel; its
-     shadow rises as it lifts off the page. */
+  /* While the image flies, a shadow flies under it, deepest mid-flight as it lifts between the page and the preview,
+     where the image lies flat on the backdrop. */
   [data-slot="image-preview-surface"] {
     display: none;
     position: fixed;
-    /* Under the panel, whose controls ride it, and over the backdrop. */
     z-index: 49;
-    background: var(--surface-raised-stronger-non-alpha);
     pointer-events: none;
 
     &::before {
@@ -33,11 +30,11 @@
       inset: 0;
       border-radius: inherit;
       box-shadow: var(--image-preview-shadow);
-      opacity: var(--image-preview-lift, 1);
+      opacity: calc(4 * var(--image-preview-lift, 0) * (1 - var(--image-preview-lift, 0)));
     }
   }
 
-  /* The origin's outline, carried over the flying image until it becomes the panel. */
+  /* The origin's outline, carried over the flying image until it lifts off the page. */
   [data-slot="image-preview-edge"] {
     display: none;
     position: fixed;
@@ -68,96 +65,87 @@
     [data-slot="image-preview-image"] {
       visibility: hidden;
     }
+  }
 
-    /* The surface stands in for the panel, so only its controls show, fading in as it lands. */
-    [data-slot="image-preview-container"] [data-slot="image-preview-content"] {
-      background: transparent;
-      box-shadow: none;
+  /* The image is the preview: no panel around it, fitted to the window with room for the controls under it. */
+  [data-slot="image-preview-content"] {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    pointer-events: auto;
+
+    &:focus-visible {
+      outline: none;
+    }
+
+    /* Kobalte unmounts closed content once its CSS animation ends, so this holds it for the closing flight. Held, it
+       must not take the page's clicks; Kobalte's inline style is otherwise auto. */
+    &[data-closed] {
+      animation: image-preview-exit var(--image-preview-exit);
+      pointer-events: none !important;
     }
   }
 
-  [data-slot="image-preview-container"] {
-    position: relative;
-    z-index: 50;
-    width: min(calc(100vw - 32px), 90vw);
-    max-width: 1200px;
-    height: min(calc(100vh - 32px), 90vh);
+  [data-slot="image-preview-body"] {
+    position: absolute;
+    inset: 44px clamp(8px, 3vw, 36px);
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 12px;
+    overflow: hidden;
+    user-select: none;
+    /* A zoomed image fades out in the padding instead of being cut at the edge; a fitted one never reaches it. */
+    mask-image:
+      linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent),
+      linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+    mask-composite: intersect;
 
-    [data-slot="image-preview-content"] {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-      max-height: 100%;
-      border-radius: var(--radius-lg);
-      background: var(--surface-raised-stronger-non-alpha);
-      box-shadow: var(--image-preview-shadow);
-      overflow: hidden;
-
-      &:focus-visible {
-        outline: none;
-      }
-
-      /* Kobalte unmounts closed content once its CSS animation ends, so this holds it for the closing flight. Held, it
-         must not take the page's clicks; Kobalte's inline style is otherwise auto. */
-      &[data-closed] {
-        animation: image-preview-exit var(--image-preview-exit);
-        pointer-events: none !important;
-      }
-
-      [data-slot="image-preview-header"] {
-        display: flex;
-        gap: 8px;
-        padding: 8px 8px 0;
-        justify-content: flex-end;
-        align-items: center;
-        align-self: stretch;
-      }
-
-      [data-slot="image-preview-zoom"] {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-      }
-
-      [data-slot="image-preview-zoom-level"] {
-        min-width: 52px;
-        justify-content: center;
-        font-variant-numeric: tabular-nums;
-      }
-
-      [data-slot="image-preview-body"] {
-        width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 16px;
-        overflow: hidden;
-        user-select: none;
-
-        &[data-zoomed] {
-          cursor: grab;
-          touch-action: pinch-zoom;
-        }
-
-        &[data-dragging] {
-          cursor: grabbing;
-        }
-      }
-
-      [data-slot="image-preview-image"] {
-        max-width: 100%;
-        max-height: calc(90vh - 100px);
-        object-fit: contain;
-        border-radius: var(--radius-md);
-        transform-origin: center;
-        -webkit-user-drag: none;
-      }
+    &[data-zoomed] {
+      cursor: grab;
+      touch-action: pinch-zoom;
     }
+
+    &[data-dragging] {
+      cursor: grabbing;
+    }
+  }
+
+  [data-slot="image-preview-image"] {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+    transform-origin: center;
+    -webkit-user-drag: none;
+  }
+
+  [data-slot="image-preview-controls"] {
+    position: absolute;
+    bottom: 12px;
+    inset-inline: 0;
+    width: fit-content;
+    margin-inline: auto;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--v2-background-bg-layer-01);
+    box-shadow: var(--v2-elevation-floating);
+  }
+
+  [data-slot="image-preview-zoom-level"] {
+    min-width: 52px;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-slot="image-preview-divider"] {
+    width: 1px;
+    height: 16px;
+    margin-inline: 2px;
+    background: var(--v2-border-border-base);
   }
 }
 

@@ -65,32 +65,32 @@ export function ImagePreview(props: ImagePreviewProps) {
   let image!: HTMLImageElement
   let standIn!: HTMLImageElement
   let surface!: HTMLDivElement
-  let header!: HTMLDivElement
   let edge!: HTMLDivElement
   let close: HTMLButtonElement | undefined
   // Nothing shows until the image has loaded and the preview knows where it lands; while flying, a stand-in image and
-  // the panel's surface travel above the dialog in place of the real ones.
+  // its shadow travel above the dialog in place of the real one.
   const [stage, setStage] = createSignal<"pending" | "flying" | "rest">("pending")
 
-  // The flight under way: where the stand-in is laid out (the flight only transforms and clips it), the panel at rest
-  // and whether its controls sit at its left, the springs, and what happens when it lands.
-  let course:
-    | { at: Box; panel: Box; rtl: boolean; flight: ReturnType<typeof createFlight>; landed: () => void }
-    | undefined
+  // The flight under way: where the stand-in is laid out (the flight only transforms and clips it), the springs, and
+  // what happens when it lands.
+  let course: { at: Box; flight: ReturnType<typeof createFlight>; landed: () => void } | undefined
 
   const dim = Spring.fromDuration(0, FLIGHT_SPRING)
   // Once a close lands, the stand-in fades out over the image the page shows again, so whatever the page draws over
   // its own image (a fade under a sticky bar, say) comes in softly instead of in one frame.
   const veil = Spring.fromDuration(1, FLIGHT_SPRING)
 
-  // How far the flight has become the panel, as last painted: the origin's outline fades out as it rises.
+  // How far the flight has lifted off the page, as last painted: the origin's outline fades out as it rises.
   let lift = 0
-  // Without a flight (reduced motion, or nothing on the page to fly to) the panel only fades with the backdrop.
+  // Without a flight (reduced motion, or nothing on the page to fly to) the preview only fades with the backdrop.
   let plain = false
   let stop: (() => void) | undefined
   const [view, setView] = createSignal(FIT_VIEW)
   const [fitRatio, setFitRatio] = createSignal(1)
   const [drag, setDrag] = createSignal<{ id: number; x: number; y: number }>()
+  // Whether the press that ends in a click began on the backdrop around the image and stayed put. A pan captures the
+  // pointer, so its click lands on the backdrop wherever it began.
+  let backdrop = false
   // Where an eased zoom is heading, so repeated steps build on the destination rather than the frame in flight.
   let goal = FIT_VIEW
   let animation: AnimationPlaybackControls | undefined
@@ -164,7 +164,7 @@ export function ImagePreview(props: ImagePreviewProps) {
     const flight = createFlight(from)
     const rest = restFrame()
     flight.to(rest, KICK.open, tuning())
-    course = { at: place(fitted()), ...panel(rest), flight, landed: () => setStage("rest") }
+    course = { at: place(fitted()), flight, landed: () => setStage("rest") }
     hideOrigin()
     paint()
     setStage("flying")
@@ -187,7 +187,7 @@ export function ImagePreview(props: ImagePreviewProps) {
     // A close mid-open turns the flight around where it is, keeping its velocity.
     if (!course) {
       const rest = restFrame()
-      course = { at: place(fitted()), ...panel(rest), flight: createFlight(rest), landed: showOrigin }
+      course = { at: place(fitted()), flight: createFlight(rest), landed: showOrigin }
     }
 
     course.flight.to(to, KICK.close, tuning())
@@ -234,18 +234,14 @@ export function ImagePreview(props: ImagePreviewProps) {
   const paint = () => {
     scrim.style.opacity = String(dim.value)
     standIn.style.opacity = String(plain ? dim.value : veil.value)
-    // Landed, the surface lies under the stand-in's own outline, so it leaves at once rather than fading in between.
     surface.style.opacity = course ? "1" : "0"
 
     if (course) {
       const frame = course.flight.frame()
-      // The controls ride the panel's top corner on their side, fading in as it lifts.
-      const side = course.rtl ? frame.surface.x - course.panel.x : right(frame.surface) - right(course.panel)
-      header.style.transform = `translate(${side}px, ${frame.surface.y - course.panel.y}px)`
       const style = flightStyle(course.at, frame)
       standIn.style.transform = style.transform
       standIn.style.clipPath = style.clipPath
-      // The surface and the outline are leaf boxes, so sizing them every frame stays cheap; scaling them instead would
+      // The shadow and the outline are leaf boxes, so sizing them every frame stays cheap; scaling them instead would
       // stretch their corners and shadow.
       layout(surface, frame.surface, frame.surfaceRadius)
       surface.style.setProperty("--image-preview-lift", String(frame.lift))
@@ -253,8 +249,7 @@ export function ImagePreview(props: ImagePreviewProps) {
       lift = frame.lift
     }
 
-    if (!course) header.style.transform = ""
-    // Flying, the panel's controls arrive with the surface; without a flight they fade with the backdrop.
+    // Flying, the controls arrive as the image lifts; without a flight they fade with the backdrop.
     content.style.opacity = String(plain ? dim.value : course ? lift ** 2 : dim.value ** 2)
     edge.style.opacity = String((1 - lift) * veil.value)
   }
@@ -270,23 +265,15 @@ export function ImagePreview(props: ImagePreviewProps) {
     return box
   }
 
-  // The image as shown now, zoomed and panned and cropped to the viewport, in its panel.
+  // The image as shown now, zoomed and panned and cropped to the viewport. There is no panel: the image is the surface.
   const restFrame = (): FlightFrame => {
     const shown = image.getBoundingClientRect()
     const clip = intersect(shown, viewport.getBoundingClientRect())
     const cropped = clip.width < shown.width - 0.5 || clip.height < shown.height - 0.5
+    const radius = cropped ? 0 : parseFloat(getComputedStyle(image).borderTopLeftRadius) * view().scale
 
-    return {
-      image: shown,
-      clip,
-      radius: cropped ? 0 : parseFloat(getComputedStyle(image).borderTopLeftRadius) * view().scale,
-      surface: content.getBoundingClientRect(),
-      surfaceRadius: parseFloat(getComputedStyle(content).borderTopLeftRadius) || 0,
-      lift: 1,
-    }
+    return { image: shown, clip, radius, surface: clip, surfaceRadius: radius, lift: 1 }
   }
-
-  const panel = (rest: FlightFrame) => ({ panel: rest.surface, rtl: getComputedStyle(content).direction === "rtl" })
 
   // The origin's frame, cropped to the part the page shows, or nothing when it is gone or out of sight.
   const originFrame = () => {
@@ -430,97 +417,103 @@ export function ImagePreview(props: ImagePreviewProps) {
       style={{ "--image-preview-exit": `${exit()}ms` }}
     >
       <div ref={scrim} data-slot="image-preview-scrim" />
-      <div data-slot="image-preview-container">
-        <Kobalte.Content
-          ref={content}
-          data-slot="image-preview-content"
-          onOpenAutoFocus={(event) => {
-            // Open with focus on Close, as before, rather than on the zoom controls that now precede it.
+      <Kobalte.Content
+        ref={content}
+        data-slot="image-preview-content"
+        onOpenAutoFocus={(event) => {
+          // Open with focus on Close, as before, rather than on the zoom controls that precede it.
+          event.preventDefault()
+          close?.focus()
+        }}
+        onPointerDown={(event: PointerEvent) => {
+          backdrop = event.target === content || event.target === viewport
+        }}
+        onClick={(event: MouseEvent) => {
+          // The preview fills the window, so a click on the backdrop around the image lands here rather than outside.
+          if (!backdrop || (event.target !== content && event.target !== viewport)) return
+          dialog.close()
+        }}
+      >
+        <div
+          ref={viewport}
+          data-slot="image-preview-body"
+          data-zoomed={view().scale > 1 ? "" : undefined}
+          data-dragging={drag() ? "" : undefined}
+          onDblClick={(event) => {
+            if (goal.scale > 1) return ease(FIT_VIEW)
+            ease(zoomAt(goal, detailScale(fitRatio()), point(event), bounds()))
+          }}
+          onPointerDown={(event) => {
+            if (event.button !== 0 || view().scale <= 1) return
             event.preventDefault()
-            close?.focus()
+            viewport.setPointerCapture(event.pointerId)
+            setDrag({ id: event.pointerId, x: event.clientX, y: event.clientY })
+          }}
+          onPointerMove={(event) => {
+            const current = drag()
+
+            if (current?.id !== event.pointerId) return
+            backdrop = false
+            setDrag({ id: current.id, x: event.clientX, y: event.clientY })
+            follow(panBy(view(), { x: event.clientX - current.x, y: event.clientY - current.y }, bounds()))
+          }}
+          onPointerUp={(event) => {
+            if (drag()?.id === event.pointerId) setDrag(undefined)
+          }}
+          onPointerCancel={(event) => {
+            if (drag()?.id === event.pointerId) setDrag(undefined)
           }}
         >
-          <div ref={header} data-slot="image-preview-header">
-            <div data-slot="image-preview-zoom">
-              <IconButton
-                data-slot="image-preview-zoom-out"
-                icon={<Icon name="minus" />}
-                variant="ghost"
-                aria-label={i18n.t("ui.imagePreview.zoomOut")}
-                onClick={() => step(1 / STEP)}
-              />
-              <Button
-                data-slot="image-preview-zoom-level"
-                variant="ghost-muted"
-                size="small"
-                aria-label={i18n.t("ui.imagePreview.zoomToFit")}
-                title={i18n.t("ui.imagePreview.zoomToFit")}
-                onClick={() => ease(FIT_VIEW)}
-              >
-                {percent().format(view().scale * fitRatio())}
-              </Button>
-              <IconButton
-                data-slot="image-preview-zoom-in"
-                icon={<Icon name="plus" />}
-                variant="ghost"
-                aria-label={i18n.t("ui.imagePreview.zoomIn")}
-                onClick={() => step(STEP)}
-              />
-            </div>
-            <Kobalte.CloseButton
-              ref={close}
-              data-slot="image-preview-close"
-              as={IconButton}
-              icon={<Icon name="close" />}
-              variant="ghost"
-              aria-label={i18n.t("ui.common.close")}
-            />
-          </div>
-          <div
-            ref={viewport}
-            data-slot="image-preview-body"
-            data-zoomed={view().scale > 1 ? "" : undefined}
-            data-dragging={drag() ? "" : undefined}
-            onDblClick={(event) => {
-              if (goal.scale > 1) return ease(FIT_VIEW)
-              ease(zoomAt(goal, detailScale(fitRatio()), point(event), bounds()))
+          <img
+            ref={image}
+            src={props.src}
+            alt={props.alt ?? i18n.t("ui.imagePreview.alt")}
+            data-slot="image-preview-image"
+            draggable={false}
+            onLoad={() => {
+              measure()
+              void reveal()
             }}
-            onPointerDown={(event) => {
-              if (event.button !== 0 || view().scale <= 1) return
-              event.preventDefault()
-              viewport.setPointerCapture(event.pointerId)
-              setDrag({ id: event.pointerId, x: event.clientX, y: event.clientY })
-            }}
-            onPointerMove={(event) => {
-              const current = drag()
-
-              if (current?.id !== event.pointerId) return
-              setDrag({ id: current.id, x: event.clientX, y: event.clientY })
-              follow(panBy(view(), { x: event.clientX - current.x, y: event.clientY - current.y }, bounds()))
-            }}
-            onPointerUp={(event) => {
-              if (drag()?.id === event.pointerId) setDrag(undefined)
-            }}
-            onPointerCancel={(event) => {
-              if (drag()?.id === event.pointerId) setDrag(undefined)
-            }}
+            onError={() => void reveal()}
+            style={{ transform: `translate(${view().x}px, ${view().y}px) scale(${view().scale})` }}
+          />
+        </div>
+        <div data-slot="image-preview-controls">
+          <IconButton
+            data-slot="image-preview-zoom-out"
+            icon={<Icon name="minus" />}
+            variant="ghost"
+            aria-label={i18n.t("ui.imagePreview.zoomOut")}
+            onClick={() => step(1 / STEP)}
+          />
+          <Button
+            data-slot="image-preview-zoom-level"
+            variant="ghost-muted"
+            size="small"
+            aria-label={i18n.t("ui.imagePreview.zoomToFit")}
+            title={i18n.t("ui.imagePreview.zoomToFit")}
+            onClick={() => ease(FIT_VIEW)}
           >
-            <img
-              ref={image}
-              src={props.src}
-              alt={props.alt ?? i18n.t("ui.imagePreview.alt")}
-              data-slot="image-preview-image"
-              draggable={false}
-              onLoad={() => {
-                measure()
-                void reveal()
-              }}
-              onError={() => void reveal()}
-              style={{ transform: `translate(${view().x}px, ${view().y}px) scale(${view().scale})` }}
-            />
-          </div>
-        </Kobalte.Content>
-      </div>
+            {percent().format(view().scale * fitRatio())}
+          </Button>
+          <IconButton
+            data-slot="image-preview-zoom-in"
+            icon={<Icon name="plus" />}
+            variant="ghost"
+            aria-label={i18n.t("ui.imagePreview.zoomIn")}
+            onClick={() => step(STEP)}
+          />
+          <div data-slot="image-preview-divider" />
+          <Kobalte.CloseButton
+            ref={close}
+            data-slot="image-preview-close"
+            as={IconButton}
+            icon={<Icon name="close" />}
+            variant="ghost"
+            aria-label={i18n.t("ui.common.close")}
+          />
+        </div>
+      </Kobalte.Content>
       <div data-slot="image-preview-surface" ref={surface} />
       <img data-slot="image-preview-flight" src={props.src} alt="" aria-hidden="true" ref={standIn} />
       <div data-slot="image-preview-edge" ref={edge} />
@@ -673,10 +666,6 @@ function covered(rows: number, shows: (row: number) => boolean) {
   }
 
   return low
-}
-
-function right(box: Box) {
-  return box.x + box.width
 }
 
 function layout(element: HTMLElement, frame: Box, radius: number) {
