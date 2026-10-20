@@ -20,14 +20,24 @@ export function serviceVersion(input: {
   return input.version
 }
 
-export function shouldCleanStages(input: {
-  readonly isolated?: boolean
-  readonly mode: "initial" | "reconnect"
-  readonly packaged: boolean
-  readonly started: boolean
-  readonly version: string | undefined
-}) {
-  if (!input.packaged && !input.isolated) return false
+// Retrying on timeout can also replace a server stuck in a migration longer than 120 s, which is accepted.
+export function shouldRetryEnsure(version: string | undefined, message: string) {
+  if (version !== undefined) return false
 
-  return input.started || (input.mode === "initial" && input.version !== undefined)
+  return (
+    message === "Background service failed to start" ||
+    message === "Timed out waiting for the background service to start"
+  )
+}
+
+export function stageName(version: string, arch = process.arch) {
+  return `${version}-${arch}`.replace(/[^a-zA-Z0-9._-]/g, "-")
+}
+
+export function keptStages(bundledVersion: string, runningVersion?: string, arch = process.arch) {
+  const stages = [stageName(bundledVersion, arch)]
+
+  if (runningVersion && runningVersion !== bundledVersion) stages.push(stageName(runningVersion, arch))
+
+  return stages
 }

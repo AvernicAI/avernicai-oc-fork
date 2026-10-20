@@ -3,7 +3,6 @@ import path from "node:path"
 import { app } from "electron"
 import type { Endpoint } from "@opencode/client/service"
 import { CHANNEL } from "../constants"
-import { serviceVersion } from "./cli-version"
 
 // The main thread idles between showing the first window and evaluating the main bundle, waiting
 // for the renderer's asset requests. That slot is long enough to find out whether a compatible
@@ -14,7 +13,7 @@ let probe: Promise<Endpoint | undefined> | undefined
 
 export function startSidecarProbe() {
   if (!app.isPackaged) return
-  const version = serviceVersion({ channel: CHANNEL, mode: "initial", version: bundledVersion() })
+  const version = CHANNEL === "beta" ? undefined : bundledVersion()
 
   if (version === "") return
   probe = import("@opencode/client/service")
@@ -27,8 +26,6 @@ export function sidecarProbe() {
 }
 
 function bundledVersion() {
-  if (CHANNEL === "beta") return ""
-
   try {
     return readFileSync(path.join(process.resourcesPath, "opencode-cli.version"), "utf8").trim()
   } catch {
