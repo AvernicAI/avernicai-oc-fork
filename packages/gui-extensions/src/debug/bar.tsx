@@ -1,6 +1,8 @@
 import { batch, createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { makeEventListener } from "@solid-primitives/event-listener"
+import { Icon } from "@opencode/ui/icon"
+import { IconButton } from "@opencode/ui/icon-button"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { createKeyed, useExtension } from "../sdk"
 import {
@@ -196,6 +198,7 @@ export default function DebugBar(props: {
   diagnostics?: boolean
   inline?: boolean
   motion?: { open: boolean; toggle: () => void }
+  onClose?: () => void
 }) {
   const ctx = useExtension()
   const router = ctx.router
@@ -740,8 +743,8 @@ export default function DebugBar(props: {
             />
           </Show>
         </Show>
-        <Show when={props.motion}>
-          <div class="ms-auto flex items-center gap-[9px]">
+        <div class="ms-auto flex items-center gap-[9px]">
+          <Show when={props.motion}>
             <ToggleCell
               active={globals().speed !== 1}
               inline={props.inline}
@@ -766,8 +769,19 @@ export default function DebugBar(props: {
               value={ctx.t(props.motion?.open ? "focus.on" : "focus.off")}
               onClick={() => props.motion?.toggle()}
             />
-          </div>
-        </Show>
+          </Show>
+          <Show when={props.onClose}>
+            <Tooltip appearance="compact" value={ctx.t("close.tip")} placement="top">
+              <IconButton
+                size="small"
+                variant="ghost-muted"
+                icon={<Icon name="close" />}
+                aria-label={ctx.t("close.label")}
+                onClick={() => props.onClose?.()}
+              />
+            </Tooltip>
+          </Show>
+        </div>
       </div>
     </aside>
   )

@@ -1,4 +1,4 @@
-import { createSignal, lazy, Show, Suspense } from "solid-js"
+import { lazy, Show, Suspense } from "solid-js"
 import { Command, Slot, type Setup } from "../sdk"
 import type Debug from "./index"
 
@@ -8,17 +8,20 @@ const setup: Setup<typeof Debug> = (ctx) => {
   // builds, prod included, drop the import and never contain knobs.
   const motionTools = import.meta.env.DEV || import.meta.env.VITE_OPENCODE_CHANNEL === "beta"
   const Motion = motionTools ? lazy(() => import("./motion")) : undefined
-  // Window-local; every window starts with the bar hidden.
-  const [visible, setVisible] = createSignal(false)
-
-  const [motion, setMotion] = createSignal(false)
+  const bar = ctx.stores.bar
+  const visible = () => bar.value.visible
+  const motion = () => bar.value.motion
 
   const toggle = () => {
-    setVisible((value) => !value)
+    bar.update((draft) => {
+      draft.visible = !draft.visible
+    })
   }
 
   const toggleMotion = () => {
-    setMotion((value) => !value)
+    bar.update((draft) => {
+      draft.motion = !draft.motion
+    })
   }
 
   ctx.add(
@@ -40,6 +43,7 @@ const setup: Setup<typeof Debug> = (ctx) => {
           <Suspense>
             <DebugBar
               diagnostics={import.meta.env.DEV}
+              onClose={toggle}
               motion={Motion ? { open: motion(), toggle: toggleMotion } : undefined}
               inline
             />
