@@ -3,6 +3,7 @@ import { Wordmark } from "@opencode/ui/wordmark"
 import type { Platform } from "@opencode/app/desktop"
 import { onCleanup, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
+import wallpaper from "./assets/wallhaven-5ypy88.jpg"
 import "./splash.css"
 
 export function LoadingSplash(props: {
@@ -35,61 +36,26 @@ export function LoadingSplash(props: {
     })
   })
 
-  const titlebarHeight = () => {
-    const zoom = props.platform.webviewZoom?.() ?? 1
-
-    if (props.platform.os === "macos") return `max(36px, ${36 / zoom}px)`
-
-    if (props.platform.os === "windows")
-      return `max(36px, env(titlebar-area-height, ${44 / Math.min(Math.max(zoom, 0.25), 1)}px))`
-
-    return "36px"
-  }
-
   return (
-    <Show
-      when={props.firstLaunch}
-      fallback={
-        <div
-          data-component="startup-splash"
-          class="h-dvh w-screen flex flex-col items-center justify-center"
-          classList={{
-            "bg-v2-background-bg-deep": props.deep,
-            "bg-v2-background-bg-base": !props.deep,
-          }}
-        >
-          <Splash class="w-16 h-20 opacity-50 animate-pulse" />
-        </div>
-      }
+    <div
+      data-component={props.firstLaunch ? "first-launch-splash" : "startup-splash"}
+      data-drawing={props.preview && !drawing.started ? "pending" : "running"}
+      class="startup-wallpaper-splash"
+      aria-hidden="true"
+      onAnimationEnd={(event) => {
+        if (props.firstLaunch && event.animationName === "first-launch-wordmark-draw") props.onDrawEnd()
+      }}
     >
-      <div
-        data-component="first-launch-splash"
-        data-drawing={props.preview && !drawing.started ? "pending" : "running"}
-        aria-hidden="true"
-        class="h-dvh w-screen bg-v2-background-bg-base"
-        style={{
-          // Match the default session's titlebar, panel insets, and wordmark position.
-          "padding-block-start": `calc(${titlebarHeight()} + ${props.platform.os === "windows" ? 1 : 8}px)`,
-          "padding-block-end": "8px",
-          "padding-inline": "32px",
-        }}
-        onAnimationEnd={(event) => {
-          if (event.animationName === "first-launch-wordmark-draw") props.onDrawEnd()
-        }}
-      >
-        <div class="relative size-full">
-          <div class="absolute inset-x-0 top-[25.375%]">
-            <div class="mx-auto w-full max-w-[720px]">
-              <Wordmark
-                outline
-                fade={false}
-                muted={false}
-                class="mx-auto block h-auto w-4/5 text-v2-icon-icon-faint opacity-50"
-              />
-            </div>
-          </div>
-        </div>
+      <img class="startup-wallpaper" src={wallpaper} alt="" decoding="async" />
+      <div class="startup-brand">
+        <Splash class="startup-brand-mark" />
+        <Show
+          when={props.firstLaunch}
+          fallback={<Wordmark fade={false} muted={false} class="startup-brand-wordmark" />}
+        >
+          <Wordmark outline fade={false} muted={false} class="startup-brand-wordmark" />
+        </Show>
       </div>
-    </Show>
+    </div>
   )
 }

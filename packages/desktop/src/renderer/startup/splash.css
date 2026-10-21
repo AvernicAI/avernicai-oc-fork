@@ -1,10 +1,53 @@
-[data-component="first-launch-splash"] path {
+.startup-wallpaper-splash {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  --icon-base: #8f8f8f;
+  --icon-strong-base: #fff;
+}
+
+.startup-wallpaper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.startup-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  filter: drop-shadow(0 2px 16px #000);
+}
+
+.startup-brand-mark {
+  width: 48px;
+  height: 60px;
+}
+
+.startup-brand-wordmark {
+  display: block;
+  width: min(220px, 60vw);
+  height: auto;
+  color: #fff;
+}
+
+[data-component="first-launch-splash"] .startup-brand-wordmark path {
   /* Outline paths use a normalized length so the drawing scales with the wordmark. */
   stroke-dasharray: 1;
   animation: first-launch-wordmark-draw 1000ms ease-out both;
 }
 
-[data-component="first-launch-splash"][data-drawing="pending"] path {
+[data-component="first-launch-splash"][data-drawing="pending"] .startup-brand-wordmark path {
   animation-play-state: paused;
 }
 
@@ -18,7 +61,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-component="first-launch-splash"] path {
+  [data-component="first-launch-splash"] .startup-brand-wordmark path {
     animation: none;
     stroke-dasharray: none;
   }
