@@ -13,10 +13,11 @@ export function LoadingSplash(props: {
   onDrawEnd: () => void
   onMinimumDisplay: () => void
 }) {
-  const [drawing, setDrawing] = createStore({ started: false })
+  const [drawing, setDrawing] = createStore({ started: false, loaded: false })
   let displayTimer: ReturnType<typeof setTimeout> | undefined
   const imageReady = () => {
     if (displayTimer !== undefined) return
+    setDrawing("loaded", true)
     // Start after the wallpaper loads so fast launches still show the artwork for two seconds.
     displayTimer = setTimeout(props.onMinimumDisplay, 2000)
   }
@@ -46,15 +47,18 @@ export function LoadingSplash(props: {
   return (
     <div
       data-component={props.firstLaunch ? "first-launch-splash" : "startup-splash"}
-      data-drawing={props.preview && !drawing.started ? "pending" : "running"}
+      data-drawing={props.preview && props.firstLaunch && !drawing.started ? "pending" : "running"}
+      data-loaded={drawing.loaded}
       class="startup-wallpaper-splash"
       aria-hidden="true"
-      onAnimationEnd={(event) => {
-        if (props.firstLaunch && event.animationName === "first-launch-logo-reveal") props.onDrawEnd()
-      }}
     >
       <img class="startup-wallpaper" src={wallpaper} alt="" decoding="async" onLoad={imageReady} onError={imageReady} />
-      <div class="startup-brand">
+      <div
+        class="startup-brand"
+        onAnimationEnd={(event) => {
+          if (props.firstLaunch && event.animationName === "startup-artwork-reveal") props.onDrawEnd()
+        }}
+      >
         <Splash class="startup-brand-mark" />
       </div>
     </div>

@@ -148,7 +148,7 @@ export function DesktopApp(props: { api: ElectronAPI; version: string }) {
         <Show when={!firstLaunch.loading && startup.visible}>
           <div
             data-component="startup-overlay"
-            class="fixed inset-0 z-[100] transition-opacity duration-300 ease-out"
+            class="fixed inset-0 z-[100] transition-opacity duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:duration-100"
             classList={{ "pointer-events-none opacity-0": readyToReveal() }}
             onTransitionEnd={(event) => {
               if (event.target !== event.currentTarget || !readyToReveal()) return

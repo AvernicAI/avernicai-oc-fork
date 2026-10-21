@@ -32,15 +32,19 @@
   height: 60px;
 }
 
-[data-component="first-launch-splash"] .startup-brand-mark {
-  animation: first-launch-logo-reveal 1000ms ease-out both;
+.startup-wallpaper-splash :is(.startup-wallpaper, .startup-brand) {
+  opacity: 0;
 }
 
-[data-component="first-launch-splash"][data-drawing="pending"] .startup-brand-mark {
+.startup-wallpaper-splash[data-loaded="true"] :is(.startup-wallpaper, .startup-brand) {
+  animation: startup-artwork-reveal 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.startup-wallpaper-splash[data-drawing="pending"] :is(.startup-wallpaper, .startup-brand) {
   animation-play-state: paused;
 }
 
-@keyframes first-launch-logo-reveal {
+@keyframes startup-artwork-reveal {
   from {
     opacity: 0;
   }
@@ -50,7 +54,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-component="first-launch-splash"] .startup-brand-mark {
+  .startup-wallpaper-splash[data-loaded="true"] :is(.startup-wallpaper, .startup-brand) {
     animation: none;
+    opacity: 1;
   }
 }
