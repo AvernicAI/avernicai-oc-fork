@@ -237,8 +237,12 @@
 }
 
 /* Keep the shark canvas's dark-mode grayscale/inversion off the Silk shader. */
-:root[data-color-scheme] .ocean-backdrop.silk-backdrop canvas {
+:root[data-color-scheme] .ocean-backdrop.shader-backdrop canvas {
   filter: none;
   mix-blend-mode: normal;
   opacity: 1;
+}
+
+.waves-backdrop {
+  background: linear-gradient(140deg, #10002b, #5a189a 40%, #9d4edd 75%, #e0aaff);
 }

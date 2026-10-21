@@ -1713,50 +1713,76 @@ test("glass and custom message colors persist independently and can be disabled"
   await expect(composer).toHaveCSS("background-image", "none")
 })
 
-test("Silk background persists and renders on Home and chats", async ({ page }, testInfo) => {
-  const { settings } = await openSettings(page, {
-    name: "Silk background",
-    sessions: [{ id: "ses_silk", title: "Silk chat" }],
-    seed: { tabs: [], theme: { id: "oc-2", scheme: "dark" } },
+for (const style of ["Silk", "Waves"] as const) {
+  test(`${style} background persists and renders on Home and chats`, async ({ page }, testInfo) => {
+    await page.clock.install({ time: new Date("2026-10-20T12:00:00Z") })
+    const { settings } = await openSettings(page, {
+      name: `${style} background`,
+      sessions: [{ id: "ses_silk", title: "Shader chat" }],
+      seed: { tabs: [], theme: { id: "oc-2", scheme: "dark" } },
+    })
+    await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
+    const picker = settings.locator('[data-action="settings-background-style"]')
+    await picker.click()
+    await page.getByRole("option", { name: style, exact: true }).click()
+    await expect(picker).toContainText(style)
+    await expect(picker).toBeEnabled()
+    await page.reload()
+    await expect(picker).toContainText(style)
+    await settings.getByRole("button", { name: "Back to app", exact: true }).click()
+    const canvas = page.locator(`.${style.toLowerCase()}-backdrop canvas`)
+    await expect(canvas).toBeVisible()
+    await expect(canvas).toHaveCSS("filter", "none")
+    await expect(canvas).toHaveCSS("opacity", "1")
+    await expect(canvas).toHaveCSS("mix-blend-mode", "normal")
+    // Prove shader compilation/linking succeeded rather than only seeing the CSS fallback.
+    await expect
+      .poll(() =>
+        canvas.evaluate((element: HTMLCanvasElement) => {
+          const gl = element.getContext("webgl")
+          const program = gl?.getParameter(gl.CURRENT_PROGRAM)
+          return !!program && gl!.getProgramParameter(program, gl!.LINK_STATUS)
+        }),
+      )
+      .toBe(true)
+    // Drive presentation timestamps at 60Hz even on slow software-rendering CI machines.
+    await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + 100))
+    const shaderTime = () =>
+      canvas.evaluate((element: HTMLCanvasElement) => {
+        const gl = element.getContext("webgl")!
+        const program = gl.getParameter(gl.CURRENT_PROGRAM)
+        return gl.getUniform(program, gl.getUniformLocation(program, "u_scene"))[2] as number
+      })
+    let previous = await shaderTime()
+    for (let frame = 0; frame < 3; frame++) {
+      await page.clock.runFor(17)
+      const current = await shaderTime()
+      expect(current).not.toBe(previous)
+      previous = current
+    }
+    await page.clock.resume()
+    await page.getByRole("button", { name: `Pause ${style} animation`, exact: true }).click()
+    await expect(page.getByRole("button", { name: `Play ${style} animation`, exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    )
+    await page.screenshot({ path: testInfo.outputPath("silk-home-dark.png") })
+    await page.getByRole("button", { name: "Projects & sessions", exact: true }).click()
+    await page.getByRole("button", { name: "Settings", exact: true }).click()
+    await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
+    await settings.locator('[data-action="settings-color-scheme"]').click()
+    await page.getByRole("option", { name: "Light", exact: true }).click()
+    await settings.getByRole("button", { name: "Back to app", exact: true }).click()
+    await expect(canvas).toHaveCSS("filter", "none")
+    await expect(canvas).toHaveCSS("opacity", "1")
+    await expect(canvas).toHaveCSS("mix-blend-mode", "normal")
+    await page.getByRole("button", { name: `Pause ${style} animation`, exact: true }).click()
+    await page.screenshot({ path: testInfo.outputPath("silk-home-light.png") })
+    await page.locator('[data-component="home-session-row"]').filter({ hasText: "Shader chat" }).click()
+    const chat = page.locator('[data-slot="session-chat-panel"]')
+    await expect(chat.locator(`.${style.toLowerCase()}-backdrop canvas`)).toBeVisible()
+    await expect(chat.locator('[data-component="composer-editor"]')).toBeEditable()
+    await chat.getByRole("button", { name: `Pause ${style} animation`, exact: true }).click()
+    await page.screenshot({ path: testInfo.outputPath("silk-chat.png") })
   })
-  await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
-  const picker = settings.locator('[data-action="settings-background-style"]')
-  await picker.click()
-  await page.getByRole("option", { name: "Silk", exact: true }).click()
-  await expect(picker).toContainText("Silk")
-  await expect(picker).toBeEnabled()
-  await page.reload()
-  await expect(picker).toContainText("Silk")
-  await settings.getByRole("button", { name: "Back to app", exact: true }).click()
-  const canvas = page.locator(".silk-backdrop canvas")
-  await expect(canvas).toBeVisible()
-  await expect(canvas).toHaveCSS("filter", "none")
-  await expect(canvas).toHaveCSS("opacity", "1")
-  await expect(canvas).toHaveCSS("mix-blend-mode", "normal")
-  // Prove shader compilation/linking succeeded rather than only seeing the CSS fallback.
-  await expect.poll(() => canvas.evaluate((element: HTMLCanvasElement) => {
-    const gl = element.getContext("webgl")
-    const program = gl?.getParameter(gl.CURRENT_PROGRAM)
-    return !!program && gl!.getProgramParameter(program, gl!.LINK_STATUS)
-  })).toBe(true)
-  await page.getByRole("button", { name: "Pause Silk animation", exact: true }).click()
-  await expect(page.getByRole("button", { name: "Play Silk animation", exact: true })).toHaveAttribute("aria-pressed", "true")
-  await page.screenshot({ path: testInfo.outputPath("silk-home-dark.png") })
-  await page.getByRole("button", { name: "Projects & sessions", exact: true }).click()
-  await page.getByRole("button", { name: "Settings", exact: true }).click()
-  await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
-  await settings.locator('[data-action="settings-color-scheme"]').click()
-  await page.getByRole("option", { name: "Light", exact: true }).click()
-  await settings.getByRole("button", { name: "Back to app", exact: true }).click()
-  await expect(canvas).toHaveCSS("filter", "none")
-  await expect(canvas).toHaveCSS("opacity", "1")
-  await expect(canvas).toHaveCSS("mix-blend-mode", "normal")
-  await page.getByRole("button", { name: "Pause Silk animation", exact: true }).click()
-  await page.screenshot({ path: testInfo.outputPath("silk-home-light.png") })
-  await page.locator('[data-component="home-session-row"]').filter({ hasText: "Silk chat" }).click()
-  const chat = page.locator('[data-slot="session-chat-panel"]')
-  await expect(chat.locator(".silk-backdrop canvas")).toBeVisible()
-  await expect(chat.locator('[data-component="composer-editor"]')).toBeEditable()
-  await chat.getByRole("button", { name: "Pause Silk animation", exact: true }).click()
-  await page.screenshot({ path: testInfo.outputPath("silk-chat.png") })
-})
+}

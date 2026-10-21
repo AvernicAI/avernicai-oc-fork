@@ -8,7 +8,7 @@ import { resolveBlobUrl } from "@/runtime/persistence/drafts"
 import { usePlatform } from "@/runtime/platform/platform"
 
 const BackgroundSchema = Persistence.struct({
-  builtin: Schema.Literals(["ocean", "silk"]),
+  builtin: Schema.Literals(["ocean", "silk", "waves"]),
   media: Schema.NullOr(
     Persistence.struct({
       name: Schema.String,
@@ -74,7 +74,7 @@ export const { use: useBackground, provider: BackgroundProvider } = createSimple
       },
     }
 
-    async function select(builtin: "ocean" | "silk") {
+    async function select(builtin: "ocean" | "silk" | "waves") {
       if (status.busy) return
       setStatus("busy", true)
       await Promise.resolve(platform.draftStore?.setDocument(key, { builtin, media: null }))

@@ -120,7 +120,7 @@ export const clientSettings: Entry<SettingsRootTab>[] = [
     tab: "appearance",
     label: "settings.background.title",
     target: "settings-background",
-    keywords: "wallpaper image png video movie sharks ocean silk shader",
+    keywords: "wallpaper image png video movie sharks ocean silk waves shader",
   },
   {
     tab: "appearance",

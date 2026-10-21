@@ -1,18 +1,18 @@
 import { onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
-import type { createSilk } from "./silk-engine"
+import type { createShader } from "./shader-engine"
 
-export function SilkBackdrop() {
+export function ShaderBackdrop(props: { kind: "silk" | "waves" }) {
   const language = useLanguage()
   const [state, setState] = createStore({ paused: false })
   let canvas!: HTMLCanvasElement
-  let engine: ReturnType<typeof createSilk>
+  let engine: ReturnType<typeof createShader>
   let disposed = false
   onMount(async () => {
-    const { createSilk } = await import("./silk-engine")
+    const { createShader } = await import("./shader-engine")
     if (disposed) return
-    engine = createSilk(canvas)
+    engine = createShader(canvas, props.kind)
     engine?.setPaused(state.paused)
   })
   onCleanup(() => {
@@ -21,14 +21,14 @@ export function SilkBackdrop() {
   })
   return (
     <>
-      <div class="ocean-backdrop ocean-custom silk-backdrop" aria-hidden="true">
+      <div class={`ocean-backdrop ocean-custom shader-backdrop ${props.kind}-backdrop`} aria-hidden="true">
         <canvas ref={canvas} />
         <div class="ocean-haze" />
       </div>
       <button
         type="button"
         class="ocean-motion"
-        aria-label={language.t(state.paused ? "home.silk.play" : "home.silk.pause")}
+        aria-label={language.t(state.paused ? `home.${props.kind}.play` : `home.${props.kind}.pause`)}
         aria-pressed={state.paused}
         onClick={() => {
           setState("paused", !state.paused)

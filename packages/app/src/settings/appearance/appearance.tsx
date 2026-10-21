@@ -169,9 +169,9 @@ export const SettingsAppearance: Component = () => {
               title={language.t("settings.background.style")}
               description={language.t("settings.background.style.description")}
             >
-              <Select<"ocean" | "silk" | "custom">
+              <Select<"ocean" | "silk" | "waves" | "custom">
                 data-action="settings-background-style"
-                options={background.media() ? ["ocean", "silk", "custom"] : ["ocean", "silk"]}
+                options={background.media() ? ["ocean", "silk", "waves", "custom"] : ["ocean", "silk", "waves"]}
                 current={background.mode()}
                 label={(mode) => language.t(`settings.background.${mode}`)}
                 disabled={!background.ready() || background.busy()}

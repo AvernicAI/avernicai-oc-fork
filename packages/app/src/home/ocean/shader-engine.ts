@@ -1,10 +1,33 @@
-import fragment from "./silk.frag?raw"
+import silk from "./silk.frag?raw"
+import waves from "./waves.frag?raw"
 
 const vertex = `attribute vec2 position;
 void main() { gl_Position = vec4(position, 0.0, 1.0); }`
 
-// One triangle, no textures or pointer listeners. Limit animation to 30fps and retina scale to 2.
-export function createSilk(canvas: HTMLCanvasElement) {
+// One triangle, no textures or pointer listeners. Draw on every display frame; cap retina scale at 2.
+export function createShader(canvas: HTMLCanvasElement, kind: "silk" | "waves") {
+  const preset =
+    kind === "waves"
+      ? {
+          fragment: waves,
+          colors: [0.063, 0, 0.169, 0.353, 0.094, 0.604, 0.616, 0.306, 0.867, 0.878, 0.667, 1],
+          speed: -0.73,
+          shape: [2, 0.54, 0.47, 0.04],
+          surface: [1.54, 1.16, 0, 1],
+          finish: [0, 0.21, 0.002, 0.1],
+          transform: [4012, 5.65, 0.12, 0],
+          space: [0.11, -0.19, 0, 0],
+        }
+      : {
+          fragment: silk,
+          colors: [0.008, 0.004, 0.039, 0.016, 0.02, 0.18, 0.239, 0.173, 0.553, 0.569, 0.42, 0.749],
+          speed: 0.76,
+          shape: [1.26, 0.28, 0.5, 0],
+          surface: [2.4, 1.11, 0, 1],
+          finish: [0, 0, 0, 0.05],
+          transform: [1581, 0, 0, 0],
+          space: [0, 0, 0, 0],
+        }
   const gl = canvas.getContext("webgl", { alpha: false, antialias: false, depth: false, stencil: false })
   if (!gl) return
 
@@ -31,7 +54,7 @@ export function createSilk(canvas: HTMLCanvasElement) {
     const shaders = [gl.VERTEX_SHADER, gl.FRAGMENT_SHADER].map((type, index) => {
       const shader = gl.createShader(type)
       if (!shader) return null
-      gl.shaderSource(shader, index === 0 ? vertex : fragment)
+      gl.shaderSource(shader, index === 0 ? vertex : preset.fragment)
       gl.compileShader(shader)
       if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader
       gl.deleteShader(shader)
@@ -64,16 +87,11 @@ export function createSilk(canvas: HTMLCanvasElement) {
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
     gl.uniform3fv(
       gl.getUniformLocation(program, "u_colors[0]"),
-      new Float32Array([
-        0.008, 0.004, 0.039, 0.016, 0.02, 0.18, 0.239, 0.173, 0.553, 0.569, 0.42, 0.749, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0,
-      ]),
+      new Float32Array([...preset.colors, ...Array(12).fill(0)]),
     )
-    gl.uniform4f(gl.getUniformLocation(program, "u_shape"), 1.26, 0.28, 0.5, 0)
-    gl.uniform4f(gl.getUniformLocation(program, "u_surface"), 2.4, 1.11, 0, 1)
-    gl.uniform4f(gl.getUniformLocation(program, "u_finish"), 0, 0, 0, 0.05)
-    gl.uniform4f(gl.getUniformLocation(program, "u_transform"), 1581, 0, 0, 0)
-    gl.uniform4f(gl.getUniformLocation(program, "u_space"), 0, 0, 0, 0)
+    for (const name of ["shape", "surface", "finish", "transform", "space"] as const) {
+      gl.uniform4fv(gl.getUniformLocation(program, `u_${name}`), new Float32Array(preset[name]))
+    }
     gl.uniform4f(gl.getUniformLocation(program, "u_cursor"), 0, 2, 0.65, 0.46)
     scene = gl.getUniformLocation(program, "u_scene")
   }
@@ -81,7 +99,7 @@ export function createSilk(canvas: HTMLCanvasElement) {
   const draw = () => {
     if (!program || lost) return
     gl.viewport(0, 0, canvas.width, canvas.height)
-    gl.uniform4f(scene, canvas.width, canvas.height, elapsed * 0.76, 4)
+    gl.uniform4f(scene, canvas.width, canvas.height, elapsed * preset.speed, 4)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     painted = true
   }
@@ -89,11 +107,9 @@ export function createSilk(canvas: HTMLCanvasElement) {
   const tick = (now: number) => {
     frame = 0
     if (!running()) return
-    if (!previous || now - previous >= 1000 / 30) {
-      if (previous) elapsed += Math.min((now - previous) / 1000, 0.1)
-      previous = now
-      draw()
-    }
+    if (previous) elapsed += Math.min((now - previous) / 1000, 0.1)
+    previous = now
+    draw()
     frame = requestAnimationFrame(tick)
   }
   const schedule = () => {

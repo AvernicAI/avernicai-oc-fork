@@ -5,18 +5,22 @@ import { useBackground } from "@/settings/appearance/background"
 import { useAppearanceEffects } from "@/settings/appearance/effects"
 import { oceanRoster } from "./roster"
 import type { OceanEngine } from "./engine"
-import { SilkBackdrop } from "./silk"
+import { ShaderBackdrop } from "./shader"
 import "./ocean.css"
 
 export function OceanBackdrop() {
   const background = useBackground()
+  const shader = () => {
+    const mode = background.mode()
+    return mode === "silk" || mode === "waves" ? mode : undefined
+  }
 
   return (
     <Show
       when={background.media()}
       fallback={
-        <Show when={background.mode() === "silk"} fallback={<SharkBackdrop />}>
-          <SilkBackdrop />
+        <Show when={shader()} fallback={<SharkBackdrop />} keyed>
+          {(kind) => <ShaderBackdrop kind={kind} />}
         </Show>
       }
     >
