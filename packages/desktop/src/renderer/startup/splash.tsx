@@ -12,8 +12,16 @@ export function LoadingSplash(props: {
   platform: Platform
   preview: boolean
   onDrawEnd: () => void
+  onMinimumDisplay: () => void
 }) {
   const [drawing, setDrawing] = createStore({ started: false })
+  let displayTimer: ReturnType<typeof setTimeout> | undefined
+  const imageReady = () => {
+    if (displayTimer !== undefined) return
+    // Start after the wallpaper loads so fast launches still show the artwork for two seconds.
+    displayTimer = setTimeout(props.onMinimumDisplay, 2000)
+  }
+  onCleanup(() => clearTimeout(displayTimer))
   onMount(() => {
     if (!props.preview || !props.firstLaunch) return
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)")
@@ -46,7 +54,7 @@ export function LoadingSplash(props: {
         if (props.firstLaunch && event.animationName === "first-launch-wordmark-draw") props.onDrawEnd()
       }}
     >
-      <img class="startup-wallpaper" src={wallpaper} alt="" decoding="async" />
+      <img class="startup-wallpaper" src={wallpaper} alt="" decoding="async" onLoad={imageReady} onError={imageReady} />
       <div class="startup-brand">
         <Splash class="startup-brand-mark" />
         <Show

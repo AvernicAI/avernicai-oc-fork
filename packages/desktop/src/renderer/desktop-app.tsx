@@ -43,6 +43,7 @@ export function DesktopApp(props: { api: ElectronAPI; version: string }) {
     themeReady: false,
     onboardingReady: false,
     drawingReady: false,
+    splashReady: false,
     route,
   })
 
@@ -74,6 +75,7 @@ export function DesktopApp(props: { api: ElectronAPI; version: string }) {
 
   const readyToReveal = () =>
     startup.ready &&
+    startup.splashReady &&
     (!import.meta.env.OPENCODE_TEST_ONBOARDING || !firstLaunch() || initialUrl !== "/" || startup.drawingReady)
 
   // Reveal only after the theme and the first-launch splash choice are both resolved.
@@ -159,6 +161,7 @@ export function DesktopApp(props: { api: ElectronAPI; version: string }) {
               platform={platform}
               preview={import.meta.env.OPENCODE_TEST_ONBOARDING}
               onDrawEnd={() => setStartup("drawingReady", true)}
+              onMinimumDisplay={() => setStartup("splashReady", true)}
             />
           </div>
         </Show>
