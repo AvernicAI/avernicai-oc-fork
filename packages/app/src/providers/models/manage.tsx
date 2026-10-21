@@ -11,6 +11,7 @@ import { useLanguage } from "@/runtime/i18n/language"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { DialogConnectProvider } from "@/providers/connect/dialog"
 import { decode64 } from "@/runtime/persistence/base64"
+import { ModelLogo } from "./model-logo"
 import { SettingsList } from "@/settings/list"
 import { SettingsRow } from "@/settings/row"
 import { consoleModelGroup, ProviderModelSections } from "@/providers/models/provider-group"
@@ -75,7 +76,15 @@ export const DialogManageModels: Component = () => {
       <SettingsList variant="catalog">
         <For each={props.items}>
           {(item) => (
-            <SettingsRow title={item.name} description="">
+            <SettingsRow
+              title={
+                <span class="flex min-w-0 items-center gap-2">
+                  <ModelLogo model={item} />
+                  <span class="truncate">{item.name}</span>
+                </span>
+              }
+              description=""
+            >
               <div>
                 <Switch
                   checked={local.model.visible({ modelID: item.id, providerID: item.provider.id })}

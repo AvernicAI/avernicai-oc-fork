@@ -1,4 +1,7 @@
-import { Component } from "solid-js"
+import { Component, Show } from "solid-js"
+import { Button } from "@opencode/ui/button"
+import { AppearanceEffectsControls } from "./effects-controls"
+import { useBackground } from "./background"
 import { Select } from "@opencode/ui/select"
 import { TextInput } from "@opencode/ui/text-input"
 import { useLanguage } from "@/runtime/i18n/language"
@@ -66,6 +69,8 @@ const FontSetting: Component<{
 export const SettingsAppearance: Component = () => {
   const language = useLanguage()
   const appearance = createAppearanceSettingsController()
+  const background = useBackground()
+  let picker!: HTMLInputElement
 
   return (
     <>
@@ -125,6 +130,97 @@ export const SettingsAppearance: Component = () => {
               />
             </SettingsRow>
 
+            <SettingsRow
+              title={language.t("settings.background.title")}
+              description={language.t("settings.background.description")}
+            >
+              <div class="flex flex-wrap gap-2">
+                <input
+                  ref={picker}
+                  type="file"
+                  accept="image/png,video/*"
+                  class="hidden"
+                  aria-label={language.t("settings.background.choose")}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0]
+                    event.currentTarget.value = ""
+
+                    if (file) void background.choose(file)
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  data-action="settings-background"
+                  disabled={!background.ready() || background.busy()}
+                  onClick={() => picker.click()}
+                >
+                  {language.t(background.busy() ? "settings.background.saving" : "settings.background.choose")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={background.mode() === "ocean" || background.busy()}
+                  onClick={background.reset}
+                >
+                  {language.t("settings.background.reset")}
+                </Button>
+              </div>
+            </SettingsRow>
+            <SettingsRow
+              title={language.t("settings.background.style")}
+              description={language.t("settings.background.style.description")}
+            >
+              <Select<"ocean" | "silk" | "custom">
+                data-action="settings-background-style"
+                options={background.media() ? ["ocean", "silk", "custom"] : ["ocean", "silk"]}
+                current={background.mode()}
+                label={(mode) => language.t(`settings.background.${mode}`)}
+                disabled={!background.ready() || background.busy()}
+                onSelect={(mode) => mode && mode !== "custom" && void background.select(mode)}
+                placement="bottom-end"
+                gutter={6}
+              />
+            </SettingsRow>
+            <Show when={background.media()}>
+              {(media) => (
+                <div class="flex flex-col gap-2 p-4">
+                  <span class="text-12-regular text-v2-text-text-muted">{media().name}</span>
+                  <Show when={background.url()} keyed>
+                    {(url) => (
+                      <Show
+                        when={media().kind === "video"}
+                        fallback={
+                          <img
+                            src={url}
+                            alt={media().name}
+                            class="aspect-video w-full max-w-[480px] rounded-lg object-cover"
+                            onError={background.failed}
+                          />
+                        }
+                      >
+                        <video
+                          src={url}
+                          aria-label={language.t("settings.background.preview")}
+                          controls
+                          muted
+                          loop
+                          playsinline
+                          preload="metadata"
+                          class="aspect-video w-full max-w-[480px] rounded-lg object-cover"
+                          onError={background.failed}
+                        />
+                      </Show>
+                    )}
+                  </Show>
+                </div>
+              )}
+            </Show>
+            <Show when={background.error()}>
+              <p role="alert" class="p-4 text-12-regular text-v2-text-text-muted">
+                {language.t("settings.background.error")}
+              </p>
+            </Show>
+
+            <AppearanceEffectsControls />
             <FontSetting kind="ui" fonts={appearance.fonts} />
             <FontSetting kind="code" fonts={appearance.fonts} />
             <FontSetting kind="terminal" fonts={appearance.fonts} />

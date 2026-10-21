@@ -17,10 +17,8 @@ for (const direction of ["ltr", "rtl"] as const) {
       await expect(variant).toHaveText("balanced")
       await variant.click()
       const variants = page.getByRole("dialog", { name: "Choose model variant", exact: true })
-      await expect(variants.getByRole("button", { name: "balanced", exact: true })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      )
+      const effort = variants.getByRole("slider", { name: "Reasoning effort", exact: true })
+      await expect(effort).toHaveAttribute("aria-valuetext", "balanced")
       await expect(variants.getByRole("button", { name: "Close", exact: true })).toHaveCount(0)
       await expect(variants).toBeInViewport({ ratio: 1 })
       await expect(variants).not.toHaveAttribute("data-transitioning")
@@ -29,13 +27,17 @@ for (const direction of ["ltr", "rtl"] as const) {
       await expect(variants).toBeHidden()
       await expect(variant).toBeFocused()
       await variant.click()
-      await variants.getByRole("button", { name: "high", exact: true }).click()
+      await effort.focus()
+      await effort.press("End")
+      await expect(effort).toHaveAttribute("aria-valuetext", "high")
+      await page.keyboard.press("Escape")
       await expect(variants).toBeHidden()
       await expect(variant).toHaveText("high")
       await expect(variant).toBeFocused()
 
       const model = composer.locator('[data-action="composer-model"]')
       await expect(model).toHaveText("Mobile Model A")
+      await expect(model.locator('[data-component="model-logo"] use')).toHaveAttribute("href", /#deepseek$/)
       await expect(model).toHaveAttribute("data-control-type", "drawer")
       await model.click()
       const models = page.getByRole("dialog", { name: "Select model", exact: true })
@@ -43,6 +45,12 @@ for (const direction of ["ltr", "rtl"] as const) {
       await expect(models.locator('[data-slot="model-selector-drawer"]')).toBeFocused()
       await expect(search).not.toBeFocused()
       await expect(models.getByRole("button", { name: /Mobile Model A/ })).toHaveAttribute("aria-pressed", "true")
+      await expect(
+        models.getByRole("button", { name: /Mobile Model A/ }).locator('[data-component="model-logo"] use'),
+      ).toHaveAttribute("href", /#deepseek$/)
+      await expect(
+        models.getByRole("button", { name: /Mobile Model B/ }).locator('[data-component="model-logo"] use'),
+      ).toHaveAttribute("href", /#anthropic$/)
       await expect(models.getByRole("button", { name: "Close", exact: true })).toHaveCount(0)
       await expect(models).toBeInViewport({ ratio: 1 })
       await expect(models).not.toHaveAttribute("data-transitioning")
@@ -89,6 +97,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       await search.press("Enter")
       await expect(models).toBeHidden()
       await expect(model).toHaveText("Mobile Model B")
+      await expect(model.locator('[data-component="model-logo"] use')).toHaveAttribute("href", /#anthropic$/)
       await expect(composer.getByRole("textbox", { name: "Prompt", exact: true })).toBeFocused()
 
       await model.click()
@@ -122,21 +131,53 @@ for (const direction of ["ltr", "rtl"] as const) {
     })
   }
 
-  test(`desktop model and variant pickers retain menus in ${direction}`, async ({ page }) => {
+  test(`desktop model and variant pickers stay visible and retain menus in ${direction}`, async ({
+    page,
+  }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await openPickerSession(page, direction, true)
     const composer = page.locator('[data-component="composer"]')
     const variant = composer.getByRole("button", { name: "Choose model variant", exact: true })
     await variant.click()
-    await page.getByRole("menuitemradio", { name: "high", exact: true }).click()
+    const panel = page.getByRole("dialog", { name: "Choose model variant", exact: true })
+    const effort = panel.getByRole("slider", { name: "Reasoning effort", exact: true })
+    await expect(effort).toBeFocused()
+    await expect(panel.getByText("Reasoning", { exact: true })).toBeVisible()
+    expect(
+      await panel.locator(".reasoning-card").evaluate((element) => element.getBoundingClientRect().width),
+    ).toBeLessThanOrEqual(250)
+    await panel.screenshot({ path: testInfo.outputPath("reasoning-picker.png") })
+    await effort.press("Home")
+    await page.keyboard.press("Escape")
+    await expect(variant).toHaveText("default")
+    await page.mouse.move(0, 0)
+    await page.getByRole("button", { name: "Home", exact: true }).focus()
+    await expect(variant).toHaveCSS("opacity", "1")
+    await expect(variant).toHaveCSS("pointer-events", "auto")
+    await variant.click()
+    await expect(effort).toBeFocused()
+    await effort.press(direction === "rtl" ? "ArrowLeft" : "ArrowRight")
+    await expect(effort).toHaveAttribute("aria-valuetext", "balanced")
+    await effort.press("End")
+    await expect(effort).toHaveAttribute("aria-valuetext", "high")
     await expect(variant).toHaveText("high")
+    await page.keyboard.press("Escape")
     await expect(page.locator('[data-slot="mobile-drawer-content"]')).toHaveCount(0)
     const model = composer.locator('[data-action="composer-model"]')
     await expect(model).toHaveAttribute("data-control-type", "popover")
+    await expect(model.locator('[data-component="model-logo"] use')).toHaveAttribute("href", /#deepseek$/)
     await model.click()
     await expect(page.getByPlaceholder("Search models", { exact: true })).toBeFocused()
+    await expect(
+      page.getByRole("menuitemradio", { name: /Mobile Model A/ }).locator('[data-component="model-logo"] use'),
+    ).toHaveAttribute("href", /#deepseek$/)
+    await expect(
+      page.getByRole("menuitemradio", { name: /Mobile Model B/ }).locator('[data-component="model-logo"] use'),
+    ).toHaveAttribute("href", /#anthropic$/)
+    await page.getByRole("menu").screenshot({ path: testInfo.outputPath("model-logos.png") })
     await page.getByRole("menuitemradio", { name: /Mobile Model B/ }).click()
     await expect(model).toHaveText("Mobile Model B")
+    await expect(model.locator('[data-component="model-logo"] use')).toHaveAttribute("href", /#anthropic$/)
     await expect(page.locator('[data-slot="mobile-drawer-content"]')).toHaveCount(0)
   })
 }
@@ -151,7 +192,10 @@ test.describe("touch composer pickers", () => {
     const variant = composer.getByRole("button", { name: "Choose model variant", exact: true })
     await variant.tap()
     const variants = page.getByRole("dialog", { name: "Choose model variant", exact: true })
-    await variants.getByRole("button", { name: "default", exact: true }).tap()
+    const effort = variants.getByRole("slider", { name: "Reasoning effort", exact: true })
+    await effort.focus()
+    await effort.press("Home")
+    await page.keyboard.press("Escape")
     await expect(variants).toBeHidden()
     await expect(variant).toHaveText("default")
     await page.touchscreen.tap(5, 300)
@@ -193,6 +237,7 @@ async function openPickerSession(page: Page, direction: "ltr" | "rtl", paid: boo
               {
                 id: `mobile-${id}`,
                 name: `Mobile Model ${id.toUpperCase()}`,
+                family: id === "a" ? "deepseek" : "claude",
                 cost: { input: paid ? 1 : 0, output: paid ? 1 : 0 },
                 limit: { context: 200_000 },
                 variants: { balanced: {}, high: {} },

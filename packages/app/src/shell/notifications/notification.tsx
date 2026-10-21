@@ -6,7 +6,7 @@ import type { ServerSDK } from "@/runtime/server/client"
 import type { Data } from "@opencode/client/solid"
 import { usePlatform } from "@/runtime/platform/platform"
 import { useLanguage } from "@/runtime/i18n/language"
-import { useSettings } from "@/settings/model"
+import { projectSettingsKey, useSettings } from "@/settings/model"
 import { Persist, persisted, removePersisted } from "@/runtime/persistence/storage"
 import { Persistence } from "@/runtime/persistence/schema"
 import { playSoundById } from "@/shell/notifications/sound"
@@ -264,7 +264,40 @@ export function createServerNotificationState(input: {
     })
   }
 
+  // Permission requests block subagents too, so they alert through the root session's tab. Requests the
+  // auto-approver will answer on its own stay silent.
+  const handlePermissionAsked = (sessionID: string, eventID: string) => {
+    void lookup(sessionID).then((session) => {
+      if (disposed.value || !session) return
+
+      if (settings.permissions.autoApproves(projectSettingsKey(input.sdk.scope, session.projectID))) return
+      const root = input.data.session.root(sessionID)
+
+      if (!sessionIDHasOpenTab(tabs.store, input.key, root)) return
+
+      if (settings.sounds.permissionsEnabled()) {
+        void input.coordinator.sound(`${input.key}\0${eventID}`, () => playSoundById(settings.sounds.permissions()))
+      }
+
+      if (settings.notifications.permissions()) {
+        void input.coordinator.system(`${input.key}\0${eventID}`, () =>
+          platform.notify(
+            language.t("notification.permission.title"),
+            input.data.session.get(root)?.title ?? session.title ?? sessionID,
+            () => openNotificationSession(tabs, input.key, root),
+          ),
+        )
+      }
+    })
+  }
+
   const unsub = input.sdk.event.listen((event) => {
+    if (event.type === "permission.asked") {
+      handlePermissionAsked(event.data.sessionID, event.id)
+
+      return
+    }
+
     if (event.type === "session.execution.failed") {
       handleSessionError(event.data.sessionID, event.id)
 

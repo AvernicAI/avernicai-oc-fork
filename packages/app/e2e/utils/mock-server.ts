@@ -1453,6 +1453,7 @@ function currentModels(catalog: MockProviderCatalog) {
           modelID: model.api?.id ?? model.id,
           providerID: provider.id,
           name: model.name,
+          family: model.family,
           capabilities: { tools: true, input: ["text"], output: ["text"] },
           variants: Object.entries(model.variants ?? {}).map(([id, settings]) =>
             Predicate.isObject(settings) ? { id, settings } : { id },
@@ -1585,6 +1586,7 @@ const decodeModel = Schema.decodeUnknownOption(
   Schema.Struct({
     id: Schema.String,
     name: Schema.String,
+    family: lenient(Schema.String),
     api: lenient(Schema.Struct({ id: Schema.String })),
     limit: lenient(Schema.Struct({ context: lenient(Schema.Number), output: lenient(Schema.Number) })),
     cost: lenient(Schema.Struct({ input: lenient(Schema.Number), output: lenient(Schema.Number) })),

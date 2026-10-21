@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { expectPath, holdRoute, NO_PROVIDER, project, REMOTE_SERVER, seed, sessionHref } from "../utils/app"
 import { mockOpenCodeServer } from "../utils/mock-server"
 import { fixture, mockStressTimeline } from "../utils/session-fixture"
-import { mockRemoteServer } from "../utils/workspace"
+import { mockRemoteServer, mockWorkspace } from "../utils/workspace"
 import { APP_READY_TIMEOUT, expectAppVisible } from "../utils/waits"
 
 test.use({ serviceWorkers: "block" })
@@ -341,4 +341,24 @@ test("the project menu path arrow has a glyph when the page has an older icon sp
     .poll(() => arrow.locator("svg").evaluate((element: SVGSVGElement) => element.getBBox().width))
     .toBeGreaterThan(0)
   await expect(page.locator("#opencode-v2-icon-sprite")).toHaveCount(1)
+})
+
+test("the Home prompt carries multiline text into a new draft", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  await mockWorkspace(page, { name: "Ocean", sessions: [], seed: { theme: { id: "oc-2", scheme: "light" } } })
+  await page.goto("/")
+  const prompt = page.getByRole("textbox", { name: "Ask anything…", exact: true })
+  const submit = page.getByRole("button", { name: "Continue in a new session" })
+  await expect(prompt).toBeEditable({ timeout: APP_READY_TIMEOUT })
+  await expect(submit).toBeDisabled()
+  await prompt.fill("Build an ocean dashboard")
+  await prompt.press("Shift+Enter")
+  await prompt.press("End")
+  await prompt.press("b")
+  await expect(submit).toBeEnabled()
+  await submit.click()
+  const editor = page.locator('[data-component="composer-editor"]')
+  await expect(editor).toBeEditable({ timeout: APP_READY_TIMEOUT })
+  await expect(page).toHaveURL(/\/new-session\?draftId=/)
+  await expect(editor).toHaveText("Build an ocean dashboard\nb")
 })

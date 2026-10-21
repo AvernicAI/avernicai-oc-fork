@@ -88,6 +88,42 @@ export const clientSettings: Entry<SettingsRootTab>[] = [
   { tab: "appearance", label: "settings.general.row.theme.title", target: "settings-theme" },
   {
     tab: "appearance",
+    label: "settings.ocean.species",
+    target: "settings-ocean-species",
+    keywords: "fish shark hammerhead zebra tiger mako thresher nurse ocean background",
+  },
+  {
+    tab: "appearance",
+    label: "settings.effects.glass",
+    target: "settings-ask-glass",
+    keywords: "apple glass translucent ask bar composer",
+  },
+  {
+    tab: "appearance",
+    label: "settings.effects.transparency",
+    target: "settings-glass-transparency",
+    keywords: "glass opacity transparent slider",
+  },
+  {
+    tab: "appearance",
+    label: "settings.effects.blur",
+    target: "settings-glass-blur",
+    keywords: "glass frost blur slider",
+  },
+  {
+    tab: "appearance",
+    label: "settings.effects.colors",
+    target: "settings-message-colors",
+    keywords: "panda black white bubble message text",
+  },
+  {
+    tab: "appearance",
+    label: "settings.background.title",
+    target: "settings-background",
+    keywords: "wallpaper image png video movie sharks ocean silk shader",
+  },
+  {
+    tab: "appearance",
     label: "settings.general.row.uiFont.title",
     target: "settings-ui-font",
     keywords: "interface typeface",
@@ -134,7 +170,7 @@ export const clientSettings: Entry<SettingsRootTab>[] = [
     target: "settings-sounds-agent",
     section: "settings.general.section.sounds",
     description: "settings.general.sounds.agent.description",
-    keywords: "sound audio agent",
+    keywords: "sound audio agent custom file mp3",
   },
   {
     tab: "notifications",
@@ -142,7 +178,7 @@ export const clientSettings: Entry<SettingsRootTab>[] = [
     target: "settings-sounds-permissions",
     section: "settings.general.section.sounds",
     description: "settings.general.sounds.permissions.description",
-    keywords: "sound audio permissions",
+    keywords: "sound audio permissions custom file mp3",
   },
   {
     tab: "notifications",
@@ -150,7 +186,7 @@ export const clientSettings: Entry<SettingsRootTab>[] = [
     target: "settings-sounds-errors",
     section: "settings.general.section.sounds",
     description: "settings.general.sounds.errors.description",
-    keywords: "sound audio errors",
+    keywords: "sound audio errors custom file mp3",
   },
 ]
 

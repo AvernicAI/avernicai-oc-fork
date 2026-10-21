@@ -47,6 +47,8 @@ import type { ComposerEditorModel, ComposerSelectControl } from "./interaction"
 import { isAttachment } from "../prompt-parts"
 import "../attachments/attachments.css"
 import "./editor.css"
+import { ReasoningPicker } from "./reasoning-picker"
+import { glassLens } from "@/settings/appearance/glass-lens"
 
 const MobilePanelDrawer = lazy(async () => {
   const { MobilePanelDrawer } = await import("@/shell/mobile-panel-drawer")
@@ -184,6 +186,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
         />
       </Show>
       <form
+        ref={glassLens}
         data-component="composer"
         data-dock-border-underlay={props.borderUnderlay ? "true" : undefined}
         class="group/composer relative min-h-[96px] w-full overflow-clip rounded-xl bg-v2-background-bg-base"
@@ -357,13 +360,7 @@ export function ComposerEditor(props: ComposerEditorProps) {
                 <Show when={view.variant} keyed>
                   {(control) => (
                     <Show when={control.options().length > 1}>
-                      <ComposerEditorConfiguredSelect
-                        mobileDrawer
-                        title={i18n.t("ui.promptInput.chooseVariant")}
-                        keybind={["Shift", "Mod", "D"]}
-                        control={control}
-                        class={control.current() === "default" ? "composer-variant-default" : undefined}
-                      />
+                      <ReasoningPicker title={i18n.t("ui.promptInput.chooseVariant")} control={control} />
                     </Show>
                   )}
                 </Show>

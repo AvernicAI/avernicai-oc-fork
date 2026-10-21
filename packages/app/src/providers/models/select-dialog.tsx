@@ -14,6 +14,7 @@ import { ScrollView } from "@opencode/ui/scroll-view"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { Menu } from "@opencode/ui/menu"
 import { TextInput } from "@opencode/ui/text-input"
+import { ModelLogo } from "./model-logo"
 import { ModelTooltip } from "./tooltip"
 import { useLanguage } from "@/runtime/i18n/language"
 import { ExternalLink } from "@/runtime/platform/external-link"
@@ -150,14 +151,13 @@ const ModelList: Component<{
             >
               <div data-slot="settings-row-copy">
                 <div data-slot="settings-row-title" class="flex items-center gap-2">
+                  <ModelLogo model={item} />
                   <Tooltip
                     inactive={props.mobile}
                     placement="right-start"
                     gutter={12}
                     openDelay={0}
-                    value={
-                      <ModelTooltip model={item} latest={item.latest} free={isFreeModel(item)} v2 />
-                    }
+                    value={<ModelTooltip model={item} latest={item.latest} free={isFreeModel(item)} v2 />}
                   >
                     <span class="min-w-0 truncate">{item.name}</span>
                   </Tooltip>
@@ -722,14 +722,7 @@ export function ModelSelectorPopoverView(props: {
                               placement="right-start"
                               gutter={6}
                               openDelay={0}
-                              value={
-                                <ModelTooltip
-                                  model={item}
-                                  latest={item.latest}
-                                  free={isFreeModel(item)}
-                                  v2
-                                />
-                              }
+                              value={<ModelTooltip model={item} latest={item.latest} free={isFreeModel(item)} v2 />}
                             >
                               <Menu.RadioItem
                                 value={modelKey(item)}
@@ -743,6 +736,7 @@ export function ModelSelectorPopoverView(props: {
                                 }}
                                 onSelect={() => selectModel(item)}
                               >
+                                <ModelLogo model={item} />
                                 <span class="min-w-0 truncate leading-5">{item.name}</span>
                                 <Show when={isFreeModel(item)}>
                                   <Badge class="shrink-0">{language.t("model.tag.free")}</Badge>

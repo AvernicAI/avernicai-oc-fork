@@ -13,6 +13,8 @@ const session = { id: "session-1", title: "Test session", location: { directory:
 
 const alerts: string[] = []
 
+const permissions = { autoApprove: false }
+
 const tabs = { store: new Array<Tab>() }
 
 let createServerNotificationState: typeof import("@/shell/notifications/notification").createServerNotificationState
@@ -44,8 +46,14 @@ beforeAll(async () => {
   mock.module("@/settings/model", () => ({
     ...real.settings,
     useSettings: () => ({
-      sounds: { agentEnabled: () => false, errorsEnabled: () => false },
-      notifications: { agent: () => true, errors: () => true },
+      sounds: {
+        agentEnabled: () => false,
+        errorsEnabled: () => false,
+        permissionsEnabled: () => true,
+        permissions: () => "staplebops-01",
+      },
+      notifications: { agent: () => true, errors: () => true, permissions: () => true },
+      permissions: { autoApproves: () => permissions.autoApprove },
     }),
   }))
   mock.module("@/runtime/i18n/language", () => ({
@@ -302,4 +310,60 @@ test("unread state honours the old local list until its viewed state is carried 
   third.dispose()
   vi.useRealTimers()
   setSystemTime()
+})
+
+test("a subagent permission request alerts through its root session's tab unless auto-approve answers it", async () => {
+  alerts.length = 0
+  tabs.store = [{ type: "session", server, sessionId: session.id }]
+  const sounds = new Array<string>()
+  const listeners = new Array<(event: OpenCodeEvent) => void>()
+  const child = { ...session, id: "child-1", title: "Subagent", parentID: session.id }
+
+  const emit = (id: string) =>
+    listeners.forEach((listener) =>
+      // SAFETY: the notification state reads only the type, id and session of permission events.
+      listener({ type: "permission.asked", id, data: { id: `permission-${id}`, sessionID: child.id } } as never),
+    )
+
+  const dispose = createRoot((dispose) => {
+    createState({
+      sdk: {
+        scope: ServerScope.local,
+        event: {
+          listen: (listener: (event: OpenCodeEvent) => void) => {
+            listeners.push(listener)
+
+            return () => {}
+          },
+        },
+      },
+      data: {
+        session: {
+          get: (id: string) => (id === child.id ? child : session),
+          root: () => session.id,
+        },
+      },
+      coordinator: {
+        sound: async (id: string) => {
+          sounds.push(id)
+        },
+        system: async (_id: string, fn: () => Promise<void>) => fn(),
+      },
+    })
+
+    return dispose
+  })
+
+  emit("event-1")
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(sounds).toEqual([`${server}\0event-1`])
+  expect(alerts).toEqual(["notification.permission.title"])
+
+  permissions.autoApprove = true
+  emit("event-2")
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(sounds).toHaveLength(1)
+  expect(alerts).toHaveLength(1)
+  permissions.autoApprove = false
+  dispose()
 })

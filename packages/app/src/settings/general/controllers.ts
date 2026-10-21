@@ -1,4 +1,6 @@
 import { createMemo, createResource, onMount, type Accessor } from "solid-js"
+import { createStore } from "solid-js/store"
+import { Schema } from "effect"
 import type { ColorScheme } from "@opencode/ui/theme/context"
 import { useTheme } from "@opencode/ui/theme/context"
 import {
@@ -13,7 +15,10 @@ import {
   terminalInput,
   useSettings,
 } from "@/settings/model"
-import { playSoundById, SOUND_OPTIONS } from "@/shell/notifications/sound"
+import { CUSTOM_SOUND_PREFIX, playSoundById, SOUND_OPTIONS } from "@/shell/notifications/sound"
+import { Persist, persisted } from "@/runtime/persistence/storage"
+import { Persistence } from "@/runtime/persistence/schema"
+import { usePlatform } from "@/runtime/platform/platform"
 import { createSoundPreviewController } from "./behavior"
 import { ServerConnection } from "@/runtime/server/registry"
 import { useServerCtx } from "@/runtime/server/runtime"
@@ -117,26 +122,54 @@ const noneSound = { id: "none", label: "sound.option.none" } as const
 
 export const soundOptions = [noneSound, ...SOUND_OPTIONS]
 
-export type SoundSelectOption = (typeof soundOptions)[number]
+/** A built-in sound labelled by translation key, or a chosen file labelled by its name. */
+export type SoundSelectOption = { id: string; label: string; custom?: boolean }
+
+const CustomSoundSchema = Schema.NullOr(
+  Persistence.struct({
+    name: Schema.String,
+    blob: Persistence.struct({ id: Schema.String, url: Persistence.optional(Schema.String) }),
+  }),
+)
+
+// The chosen files live in the draft store so their bytes survive restarts. This document is what keeps
+// each blob referenced; the sound settings only hold the `file:` id that playback resolves.
+const CustomSoundsSchema = Persistence.struct({
+  agent: CustomSoundSchema,
+  permissions: CustomSoundSchema,
+  errors: CustomSoundSchema,
+})
+
+type SoundChannel = "agent" | "permissions" | "errors"
 
 export function createSoundSettingsController() {
   const settings = useSettings()
+  const platform = usePlatform()
   const preview = createSoundPreviewController(playSoundById)
+  const target = Persist.prompt(Persist.global("sounds.custom"))
+  const key = `${target.storage}:${target.key}`
+  const [custom, setCustom] = persisted(target, CustomSoundsSchema, { agent: null, permissions: null, errors: null })
+  const [status, setStatus] = createStore({
+    busy: undefined as SoundChannel | undefined,
+    error: undefined as SoundChannel | undefined,
+  })
 
   const channel = (
+    name: SoundChannel,
     enabled: Accessor<boolean>,
     current: Accessor<string>,
     setEnabled: (value: boolean) => void,
     set: (id: string) => void,
-  ) => ({
-    current: createMemo(() =>
-      enabled() ? (soundOptions.find((option) => option.id === current()) ?? noneSound) : noneSound,
-    ),
-    highlight: (option: SoundSelectOption | undefined) => {
-      if (!option) return
-      preview.play(option.id === "none" ? undefined : option.id)
-    },
-    select: (option: SoundSelectOption | null) => {
+  ) => {
+    const options = createMemo((): SoundSelectOption[] => {
+      const file = custom[name]
+
+      if (!file) return soundOptions
+
+      return [noneSound, { id: CUSTOM_SOUND_PREFIX + file.blob.id, label: file.name, custom: true }, ...SOUND_OPTIONS]
+    })
+
+    const select = (option: SoundSelectOption | null) => {
       if (!option) return
 
       if (option.id === "none") {
@@ -149,29 +182,79 @@ export function createSoundSettingsController() {
       setEnabled(true)
       set(option.id)
       preview.play(option.id)
-    },
-  })
+    }
+
+    return {
+      options,
+      current: createMemo((): SoundSelectOption =>
+        enabled() ? (options().find((option) => option.id === current()) ?? noneSound) : noneSound,
+      ),
+      busy: () => status.busy === name,
+      error: () => status.error === name,
+      highlight: (option: SoundSelectOption | undefined) => {
+        if (!option) return
+        preview.play(option.id === "none" ? undefined : option.id)
+      },
+      select,
+      async choose(file: File) {
+        if (status.busy) return
+        setStatus({ busy: name, error: undefined })
+        await Promise.resolve()
+          .then(async () => {
+            if (!platform.draftStore) throw new Error("Custom sounds need on-device storage")
+            await validateAudio(file)
+            const blob = await platform.draftStore.putBlob(file)
+            const next = { ...custom, [name]: { name: file.name, blob } }
+            await platform.draftStore.setDocument(key, next)
+            setCustom(name, { name: file.name, blob })
+            select({ id: CUSTOM_SOUND_PREFIX + blob.id, label: file.name, custom: true })
+          })
+          .catch(() => setStatus("error", name))
+          .finally(() => setStatus("busy", undefined))
+      },
+    }
+  }
 
   return {
     agent: channel(
+      "agent",
       settings.sounds.agentEnabled,
       settings.sounds.agent,
       (value) => settings.sounds.setAgentEnabled(value),
       (id) => settings.sounds.setAgent(id),
     ),
     permissions: channel(
+      "permissions",
       settings.sounds.permissionsEnabled,
       settings.sounds.permissions,
       (value) => settings.sounds.setPermissionsEnabled(value),
       (id) => settings.sounds.setPermissions(id),
     ),
     errors: channel(
+      "errors",
       settings.sounds.errorsEnabled,
       settings.sounds.errors,
       (value) => settings.sounds.setErrorsEnabled(value),
       (id) => settings.sounds.setErrors(id),
     ),
   }
+}
+
+// Rejects files the webview cannot decode, so a broken pick fails here rather than silently at alert time.
+function validateAudio(file: File) {
+  const url = URL.createObjectURL(file)
+  const audio = new Audio()
+  audio.preload = "metadata"
+
+  return new Promise<void>((resolve, reject) => {
+    audio.onloadedmetadata = () => resolve()
+    audio.onerror = () => reject(new Error("Unsupported audio"))
+    audio.src = url
+  }).finally(() => {
+    audio.removeAttribute("src")
+    audio.load()
+    URL.revokeObjectURL(url)
+  })
 }
 
 export type ShellSettingsController = ReturnType<typeof createServerShellController>

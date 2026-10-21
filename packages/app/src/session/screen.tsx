@@ -402,7 +402,7 @@ function SessionScreenContent(props: {
             style={{ width: screen.panel.width() }}
           >
             <Show when={!!session.identity.params.id}>
-              <SessionPanelFrame raised>
+              <SessionPanelFrame raised background>
                 <ErrorBoundary fallback={sessionErrorFallback}>{sessionPanelContent()}</ErrorBoundary>
               </SessionPanelFrame>
             </Show>

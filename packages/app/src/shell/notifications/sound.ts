@@ -1,3 +1,5 @@
+import { resolveBlobUrl } from "@/runtime/persistence/drafts"
+
 let files: Record<string, () => Promise<string>> | undefined
 
 let loads: Record<SoundID, () => Promise<string>> | undefined
@@ -81,7 +83,12 @@ function getLoads() {
 
 const cache = new Map<SoundID, Promise<string | undefined>>()
 
+/** Prefix for sound ids that name an audio file the user chose, stored as a draft-store blob. */
+export const CUSTOM_SOUND_PREFIX = "file:"
+
 export function soundSrc(id: string | undefined) {
+  if (id?.startsWith(CUSTOM_SOUND_PREFIX))
+    return resolveBlobUrl({ id: id.slice(CUSTOM_SOUND_PREFIX.length) }).catch(() => undefined)
   const loads = getLoads()
 
   if (!id || !(id in loads)) return Promise.resolve(undefined)

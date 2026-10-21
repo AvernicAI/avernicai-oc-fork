@@ -1,8 +1,9 @@
+import { readFile } from "node:fs/promises"
 import { expect, test, type Page } from "@playwright/test"
 import type { ConfigEntry, OpenCodeEvent, WorktreeDirectory } from "@opencode/client/promise"
 import { NO_PROVIDER, REMOTE_SERVER, SERVER, holdRoute, project, session } from "../utils/app"
 import { mockMissingLocation, mockOpenCodeServer } from "../utils/mock-server"
-import { mockRemoteServer, mockWorkspace, openSettings, type WorkspaceInput } from "../utils/workspace"
+import { mockRemoteServer, mockWorkspace, openSession, openSettings, type WorkspaceInput } from "../utils/workspace"
 
 const directory = "C:/Projects/settings-demo"
 
@@ -1439,3 +1440,309 @@ for (const viewport of [
     }
   })
 }
+
+for (const kind of ["image", "video"] as const) {
+  test(`a custom ${kind} background survives refresh and can be reset`, async ({ page }, testInfo) => {
+    const { settings } = await openSettings(page, {
+      name: "Background",
+      sessions: [{ id: "ses_background", title: "Background chat" }],
+      seed: { tabs: [] },
+    })
+    await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
+    const picker = settings.getByLabel("Choose PNG or video", { exact: true })
+    const filename = kind === "image" ? "wallpaper.png" : "wallpaper.webm"
+
+    const buffer =
+      kind === "image"
+        ? Buffer.from(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
+            "base64",
+          )
+        : await readFile(new URL("../utils/fixtures/background.webm", import.meta.url))
+
+    await picker.setInputFiles({ name: filename, mimeType: kind === "image" ? "image/png" : "video/webm", buffer })
+    await expect(settings.getByText(filename, { exact: true })).toBeVisible()
+    await expect(settings.getByRole("button", { name: "Choose PNG or video", exact: true })).toBeEnabled()
+
+    if (kind === "image") {
+      await picker.setInputFiles({ name: "broken.png", mimeType: "image/png", buffer: Buffer.from("not a PNG") })
+      await expect(settings.getByRole("alert")).toContainText("Could not load this background")
+      await expect(settings.getByText(filename, { exact: true })).toBeVisible()
+    }
+
+    await page.reload()
+    await expect(settings.getByText(filename, { exact: true })).toBeVisible()
+    await settings.getByRole("button", { name: "Back to app", exact: true }).click()
+    const background = page.locator(kind === "image" ? ".ocean-custom img" : ".ocean-custom video")
+    await expect(background).toHaveCount(1)
+    const source = await background.getAttribute("src")
+
+    if (kind === "image") await expect(background).toHaveJSProperty("naturalWidth", 1)
+
+    if (kind === "video") {
+      await expect(background).toHaveJSProperty("paused", false)
+      await page.getByRole("button", { name: "Pause background video", exact: true }).click()
+      await expect(background).toHaveJSProperty("paused", true)
+    }
+
+    await page.locator('[data-component="home-session-row"]').filter({ hasText: "Background chat" }).click()
+    const chat = page.locator('[data-slot="session-chat-panel"]')
+    const chatBackground = chat.locator(kind === "image" ? ".ocean-custom img" : ".ocean-custom video")
+    await expect(chatBackground).toBeVisible()
+    await expect(chatBackground).toHaveAttribute("src", source ?? "")
+    await page.screenshot({ path: testInfo.outputPath(`chat-${kind}-background.png`) })
+    await expect(chat.locator('[data-component="composer-editor"]')).toBeEditable()
+    if (kind === "video") await expect(chatBackground).toHaveJSProperty("paused", false)
+
+    await page.getByRole("button", { name: "Home", exact: true }).click()
+    await page.getByRole("button", { name: "Projects & sessions" }).click()
+    await page.getByRole("button", { name: "Settings", exact: true }).click()
+    await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
+    await settings.getByRole("button", { name: "Restore sharks", exact: true }).click()
+    await expect(settings.getByText(filename, { exact: true })).toBeHidden()
+    await settings.getByRole("button", { name: "Back to app", exact: true }).click()
+    await expect(page.getByRole("button", { name: "Pause ocean animation", exact: true })).toBeVisible()
+    await page.locator('[data-component="home-session-row"]').filter({ hasText: "Background chat" }).click()
+    await expect(chat.locator(".ocean-backdrop canvas")).toBeVisible()
+    await expect(chat.locator(".ocean-custom")).toHaveCount(0)
+    await chat.getByRole("button", { name: "Pause ocean animation", exact: true }).click()
+    await expect(chat.getByRole("button", { name: "Play ocean animation", exact: true })).toBeVisible()
+  })
+}
+
+test("each sound effect can play a chosen audio file that survives refresh", async ({ page }, testInfo) => {
+  // Records which sources the page asks to play; headless Chromium has no audio output to observe.
+  await page.addInitScript(() => {
+    const played: string[] = []
+    Object.assign(window, { played })
+    HTMLMediaElement.prototype.play = function () {
+      played.push(this.src)
+
+      return Promise.resolve()
+    }
+  })
+  const { settings } = await openSettings(page, { name: "Sounds", sessions: [], seed: { tabs: [] } })
+  await settings.getByRole("tab", { name: "Notifications", exact: true }).click()
+
+  for (const kind of ["agent", "permissions", "errors"]) {
+    await row(kind)
+      .locator('input[type="file"]')
+      .setInputFiles({ name: `${kind}.wav`, mimeType: "audio/wav", buffer: wav() })
+    await expect(settings.locator(`[data-action="settings-sounds-${kind}"]`)).toContainText(`${kind}.wav`)
+  }
+
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { played: string[] }).played.at(-1)))
+    .toMatch(/^blob:/)
+
+  await row("errors")
+    .locator('input[type="file"]')
+    .setInputFiles({ name: "broken.mp3", mimeType: "audio/mpeg", buffer: Buffer.from("not audio") })
+  await expect(settings.getByRole("alert")).toContainText("couldn’t be played")
+  await expect(settings.locator('[data-action="settings-sounds-errors"]')).toContainText("errors.wav")
+
+  await page.reload()
+  await settings.getByRole("tab", { name: "Notifications", exact: true }).click()
+
+  for (const kind of ["agent", "permissions", "errors"])
+    await expect(settings.locator(`[data-action="settings-sounds-${kind}"]`)).toContainText(`${kind}.wav`)
+  await page.screenshot({ path: testInfo.outputPath("custom-sounds.png") })
+
+  await settings.locator('[data-action="settings-sounds-agent"]').click()
+  await page.getByRole("option", { name: "Staplebops 01" }).click()
+  await expect(settings.locator('[data-action="settings-sounds-agent"]')).toContainText("Staplebops 01")
+  await settings.locator('[data-action="settings-sounds-agent"]').click()
+  await page.getByRole("option", { name: "agent.wav" }).click()
+  await expect(settings.locator('[data-action="settings-sounds-agent"]')).toContainText("agent.wav")
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { played: string[] }).played.at(-1)))
+    .toMatch(/^blob:/)
+
+  function row(kind: string) {
+    return settings.locator(`[data-action="settings-sounds-${kind}"]`).locator("xpath=../..")
+  }
+})
+
+// A tenth of a second of 8 kHz mono silence: the smallest file every Chromium build decodes.
+function wav() {
+  const samples = 800
+  const buffer = Buffer.alloc(44 + samples * 2)
+  buffer.write("RIFF", 0)
+  buffer.writeUInt32LE(36 + samples * 2, 4)
+  buffer.write("WAVEfmt ", 8)
+  buffer.writeUInt32LE(16, 16)
+  buffer.writeUInt16LE(1, 20)
+  buffer.writeUInt16LE(1, 22)
+  buffer.writeUInt32LE(8000, 24)
+  buffer.writeUInt32LE(16000, 28)
+  buffer.writeUInt16LE(2, 32)
+  buffer.writeUInt16LE(16, 34)
+  buffer.write("data", 36)
+  buffer.writeUInt32LE(samples * 2, 40)
+
+  return buffer
+}
+
+test("all ocean species render and the selected species survives reload", async ({ page }, testInfo) => {
+  const { settings } = await openSettings(page, { name: "Ocean species", sessions: [], seed: { tabs: [] } })
+  await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
+  const picker = settings.locator('[data-action="settings-ocean-species"]')
+  await expect(picker).toContainText("Mixed species")
+
+  for (const species of [
+    "Classic shark",
+    "Hammerhead",
+    "Zebra shark",
+    "Tiger shark",
+    "Great hammerhead",
+    "Mako",
+    "Thresher",
+    "Nurse shark",
+    "Mixed species",
+  ]) {
+    await picker.click()
+    await page.getByRole("option", { name: species, exact: true }).click()
+    await expect(picker).toContainText(species)
+    await settings.getByRole("button", { name: "Back to app", exact: true }).click()
+    const canvas = page.locator(".ocean-backdrop canvas")
+    await expect(canvas).toBeVisible()
+    await expect.poll(() => canvas.evaluate((element: HTMLCanvasElement) => element.width)).toBeGreaterThan(0)
+    await page.getByRole("button", { name: "Pause ocean animation", exact: true }).click()
+    await expect(page.getByRole("button", { name: "Play ocean animation", exact: true })).toBeVisible()
+    await canvas.screenshot({ path: testInfo.outputPath(`${species.replaceAll(" ", "-")}.png`) })
+    await page.getByRole("button", { name: "Projects & sessions" }).click()
+    await page.getByRole("button", { name: "Settings", exact: true }).click()
+    await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
+    await page.reload()
+    await expect(picker).toContainText(species)
+  }
+})
+
+test("glass and custom message colors persist independently and can be disabled", async ({ page }, testInfo) => {
+  await openSession(page, {
+    name: "Glass and panda",
+    seed: { theme: { id: "oc-2", scheme: "dark" } },
+    pageMessages: () => ({
+      items: [
+        { id: "msg_style_user", type: "user", text: "Make something thoughtful.", time: { created: 1 } },
+        {
+          id: "msg_style_reply",
+          type: "assistant",
+          agent: "build",
+          model: { id: "test", providerID: "opencode" },
+          content: [{ type: "text", text: "Let’s bring it to life.\n\n```js\nconst answer = 42\n```" }],
+          time: { created: 2, completed: 3 },
+        },
+      ],
+    }),
+  })
+  const user = page.locator('[data-slot="user-message-text"]')
+  const reply = page.locator('[data-slot="text-part-body"]')
+  const composer = page.locator('[data-component="composer"]')
+  const code = reply.locator("pre")
+  await expect(code).toBeVisible()
+  const codeBackground = await code.evaluate((element) => getComputedStyle(element).backgroundColor)
+  const originalBubble = await user.evaluate((element) => getComputedStyle(element).backgroundColor)
+  const settings = page.getByTestId("settings-screen")
+  const openAppearance = async () => {
+    await page.getByRole("button", { name: "Home", exact: true }).click()
+    await page.getByRole("button", { name: "Projects & sessions" }).click()
+    await page.getByRole("button", { name: "Settings", exact: true }).click()
+    await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
+  }
+  const returnToChat = async () => {
+    await settings.getByRole("button", { name: "Back to app", exact: true }).click()
+    await page.locator('[data-component="home-session-row"]').filter({ hasText: "Glass and panda" }).click()
+    await expect(composer.locator('[data-component="composer-editor"]')).toBeEditable()
+  }
+  await openAppearance()
+  await settings.locator('[data-action="settings-ask-glass"] [data-slot="switch-control"]').click()
+  const transparency = settings.getByRole("slider", { name: "Glass transparency", exact: true })
+  const blur = settings.getByRole("slider", { name: "Glass blur", exact: true })
+  await expect(transparency).toHaveValue("82")
+  await expect(blur).toHaveValue("6")
+  await transparency.focus()
+  await transparency.press("End")
+  for (let step = 0; step < 10; step++) await transparency.press("ArrowLeft")
+  await blur.focus()
+  await blur.press("Home")
+  for (let step = 0; step < 8; step++) await blur.press("ArrowRight")
+  await expect(settings.locator(".appearance-glass-sample")).toHaveCSS(
+    "backdrop-filter",
+    /url\("#ask-glass-lens-\d+"\) blur\(8px\) saturate\(1\.9\)/,
+  )
+  await page.screenshot({ path: testInfo.outputPath("glass-controls.png") })
+  await settings.getByRole("button", { name: "Panda preset", exact: true }).click()
+  await expect(settings.getByRole("switch", { name: "Custom message colors", exact: true })).toBeChecked()
+  await page.reload()
+  await expect(transparency).toHaveValue("90")
+  await expect(blur).toHaveValue("8")
+  await expect(settings.getByRole("switch", { name: "Glass ask bar", exact: true })).toBeChecked()
+  await expect(settings.getByRole("switch", { name: "Custom message colors", exact: true })).toBeChecked()
+  await settings.getByRole("button", { name: "Back to app", exact: true }).click()
+  await expect(page.locator(".ocean-prompt")).toHaveCSS(
+    "backdrop-filter",
+    /url\("#ask-glass-lens-\d+"\) blur\(8px\) saturate\(1\.9\)/,
+  )
+  await page.screenshot({ path: testInfo.outputPath("home-glass.png") })
+  await page.locator('[data-component="home-session-row"]').filter({ hasText: "Glass and panda" }).click()
+  await expect(composer.locator('[data-component="composer-editor"]')).toBeEditable()
+  await expect(page.locator('[data-slot="session-chat-panel"]')).toHaveCSS("background-color", "rgb(0, 0, 0)")
+  await expect(page.locator('[data-slot="session-chat-panel"] > .bg-v2-background-bg-base')).toHaveCSS(
+    "background-color",
+    "rgb(0, 0, 0)",
+  )
+  await expect(user).toHaveCSS("background-color", "rgb(255, 255, 255)")
+  await expect(reply).toHaveCSS("background-color", "rgb(255, 255, 255)")
+  await expect(reply).toHaveCSS("color", "rgb(17, 17, 17)")
+  await expect(code).toHaveCSS("background-color", codeBackground)
+  await expect(composer).toHaveCSS("backdrop-filter", /url\("#ask-glass-lens-\d+"\) blur\(8px\) saturate\(1\.9\)/)
+  await expect(composer).toHaveCSS("background-image", /linear-gradient/)
+  await page.screenshot({ path: testInfo.outputPath("panda-glass.png") })
+  await openAppearance()
+  await settings.getByLabel("Message bubbles", { exact: true }).fill("#ddeeff")
+  await settings.getByLabel("Message text", { exact: true }).fill("#223344")
+  await returnToChat()
+  await expect(reply).toHaveCSS("background-color", "rgb(221, 238, 255)")
+  await expect(reply).toHaveCSS("color", "rgb(34, 51, 68)")
+  await openAppearance()
+  await settings.locator('[data-action="settings-ask-glass"] [data-slot="switch-control"]').click()
+  await settings.locator('[data-action="settings-message-colors"] [data-slot="switch-control"]').click()
+  await returnToChat()
+  await expect(user).toHaveCSS("background-color", originalBubble)
+  await expect(composer).toHaveCSS("background-image", "none")
+})
+
+test("Silk background persists and renders on Home and chats", async ({ page }, testInfo) => {
+  const { settings } = await openSettings(page, {
+    name: "Silk background",
+    sessions: [{ id: "ses_silk", title: "Silk chat" }],
+    seed: { tabs: [], theme: { id: "oc-2", scheme: "dark" } },
+  })
+  await settings.getByRole("tab", { name: "Appearance", exact: true }).click()
+  const picker = settings.locator('[data-action="settings-background-style"]')
+  await picker.click()
+  await page.getByRole("option", { name: "Silk", exact: true }).click()
+  await expect(picker).toContainText("Silk")
+  await expect(picker).toBeEnabled()
+  await page.reload()
+  await expect(picker).toContainText("Silk")
+  await settings.getByRole("button", { name: "Back to app", exact: true }).click()
+  const canvas = page.locator(".silk-backdrop canvas")
+  await expect(canvas).toBeVisible()
+  // Prove shader compilation/linking succeeded rather than only seeing the CSS fallback.
+  await expect.poll(() => canvas.evaluate((element: HTMLCanvasElement) => {
+    const gl = element.getContext("webgl")
+    const program = gl?.getParameter(gl.CURRENT_PROGRAM)
+    return !!program && gl!.getProgramParameter(program, gl!.LINK_STATUS)
+  })).toBe(true)
+  await page.getByRole("button", { name: "Pause Silk animation", exact: true }).click()
+  await expect(page.getByRole("button", { name: "Play Silk animation", exact: true })).toHaveAttribute("aria-pressed", "true")
+  await page.screenshot({ path: testInfo.outputPath("silk-home.png") })
+  await page.locator('[data-component="home-session-row"]').filter({ hasText: "Silk chat" }).click()
+  const chat = page.locator('[data-slot="session-chat-panel"]')
+  await expect(chat.locator(".silk-backdrop canvas")).toBeVisible()
+  await expect(chat.locator('[data-component="composer-editor"]')).toBeEditable()
+  await chat.getByRole("button", { name: "Pause Silk animation", exact: true }).click()
+  await page.screenshot({ path: testInfo.outputPath("silk-chat.png") })
+})
