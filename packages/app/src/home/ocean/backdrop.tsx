@@ -31,8 +31,6 @@ export function OceanBackdrop() {
 
 function SharkBackdrop() {
   const effects = useAppearanceEffects()
-  const language = useLanguage()
-  const [state, setState] = createStore({ paused: false })
   let canvas!: HTMLCanvasElement
   let engine: OceanEngine | undefined
   let disposed = false
@@ -42,7 +40,6 @@ function SharkBackdrop() {
     if (!Engine) return
     engine?.destroy()
     engine = new Engine(canvas, oceanRoster(effects.state.oceanSpecies))
-    engine.setPaused(state.paused)
   }
 
   createEffect(on(() => effects.state.oceanSpecies, start))
@@ -60,27 +57,10 @@ function SharkBackdrop() {
   })
 
   return (
-    <>
-      <div class="ocean-backdrop" aria-hidden="true">
-        <canvas ref={canvas} />
-        <div class="ocean-haze" />
-      </div>
-      <button
-        type="button"
-        class="ocean-motion"
-        aria-label={language.t(state.paused ? "home.ocean.play" : "home.ocean.pause")}
-        aria-pressed={state.paused}
-        onClick={() => {
-          setState("paused", !state.paused)
-          engine?.setPaused(state.paused)
-        }}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
-          <path d="M3 12c3-6 6 6 9 0s6 6 9 0M3 7c3-6 6 6 9 0s6 6 9 0M3 17c3-6 6 6 9 0s6 6 9 0" />
-          {state.paused && <path d="m4 3 16 18" />}
-        </svg>
-      </button>
-    </>
+    <div class="ocean-backdrop" aria-hidden="true">
+      <canvas ref={canvas} />
+      <div class="ocean-haze" />
+    </div>
   )
 }
 

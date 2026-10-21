@@ -38,7 +38,6 @@ export function createShader(canvas: HTMLCanvasElement, kind: "silk" | "waves") 
   let previous = 0
   let elapsed = 0
   let painted = false
-  let paused = false
   let visible = true
   let lost = false
   const motion = matchMedia("(prefers-reduced-motion: reduce)")
@@ -103,7 +102,7 @@ export function createShader(canvas: HTMLCanvasElement, kind: "silk" | "waves") 
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     painted = true
   }
-  const running = () => !paused && visible && !document.hidden && !motion.matches && !lost && !!program
+  const running = () => visible && !document.hidden && !motion.matches && !lost && !!program
   const tick = (now: number) => {
     frame = 0
     if (!running()) return
@@ -160,10 +159,6 @@ export function createShader(canvas: HTMLCanvasElement, kind: "silk" | "waves") 
   schedule()
 
   return {
-    setPaused(value: boolean) {
-      paused = value
-      schedule()
-    },
     destroy() {
       cancelAnimationFrame(frame)
       observer.disconnect()

@@ -1501,12 +1501,10 @@ for (const kind of ["image", "video"] as const) {
     await settings.getByRole("button", { name: "Restore sharks", exact: true }).click()
     await expect(settings.getByText(filename, { exact: true })).toBeHidden()
     await settings.getByRole("button", { name: "Back to app", exact: true }).click()
-    await expect(page.getByRole("button", { name: "Pause ocean animation", exact: true })).toBeVisible()
+    await expect(page.locator(".ocean-backdrop canvas")).toBeVisible()
     await page.locator('[data-component="home-session-row"]').filter({ hasText: "Background chat" }).click()
     await expect(chat.locator(".ocean-backdrop canvas")).toBeVisible()
     await expect(chat.locator(".ocean-custom")).toHaveCount(0)
-    await chat.getByRole("button", { name: "Pause ocean animation", exact: true }).click()
-    await expect(chat.getByRole("button", { name: "Play ocean animation", exact: true })).toBeVisible()
   })
 }
 
@@ -1607,8 +1605,7 @@ test("all ocean species render and the selected species survives reload", async 
     const canvas = page.locator(".ocean-backdrop canvas")
     await expect(canvas).toBeVisible()
     await expect.poll(() => canvas.evaluate((element: HTMLCanvasElement) => element.width)).toBeGreaterThan(0)
-    await page.getByRole("button", { name: "Pause ocean animation", exact: true }).click()
-    await expect(page.getByRole("button", { name: "Play ocean animation", exact: true })).toBeVisible()
+    await page.emulateMedia({ reducedMotion: "reduce" })
     await canvas.screenshot({ path: testInfo.outputPath(`${species.replaceAll(" ", "-")}.png`) })
     await page.getByRole("button", { name: "Projects & sessions" }).click()
     await page.getByRole("button", { name: "Settings", exact: true }).click()
@@ -1761,11 +1758,7 @@ for (const style of ["Silk", "Waves"] as const) {
       previous = current
     }
     await page.clock.resume()
-    await page.getByRole("button", { name: `Pause ${style} animation`, exact: true }).click()
-    await expect(page.getByRole("button", { name: `Play ${style} animation`, exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    )
+    await page.emulateMedia({ reducedMotion: "reduce" })
     await page.screenshot({ path: testInfo.outputPath("silk-home-dark.png") })
     await page.getByRole("button", { name: "Projects & sessions", exact: true }).click()
     await page.getByRole("button", { name: "Settings", exact: true }).click()
@@ -1776,13 +1769,11 @@ for (const style of ["Silk", "Waves"] as const) {
     await expect(canvas).toHaveCSS("filter", "none")
     await expect(canvas).toHaveCSS("opacity", "1")
     await expect(canvas).toHaveCSS("mix-blend-mode", "normal")
-    await page.getByRole("button", { name: `Pause ${style} animation`, exact: true }).click()
     await page.screenshot({ path: testInfo.outputPath("silk-home-light.png") })
     await page.locator('[data-component="home-session-row"]').filter({ hasText: "Shader chat" }).click()
     const chat = page.locator('[data-slot="session-chat-panel"]')
     await expect(chat.locator(`.${style.toLowerCase()}-backdrop canvas`)).toBeVisible()
     await expect(chat.locator('[data-component="composer-editor"]')).toBeEditable()
-    await chat.getByRole("button", { name: `Pause ${style} animation`, exact: true }).click()
     await page.screenshot({ path: testInfo.outputPath("silk-chat.png") })
   })
 }
