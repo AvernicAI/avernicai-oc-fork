@@ -23,9 +23,7 @@
 .startup-brand {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 24px;
   filter: drop-shadow(0 2px 16px #000);
 }
 
@@ -34,35 +32,25 @@
   height: 60px;
 }
 
-.startup-brand-wordmark {
-  display: block;
-  width: min(220px, 60vw);
-  height: auto;
-  color: #fff;
+[data-component="first-launch-splash"] .startup-brand-mark {
+  animation: first-launch-logo-reveal 1000ms ease-out both;
 }
 
-[data-component="first-launch-splash"] .startup-brand-wordmark path {
-  /* Outline paths use a normalized length so the drawing scales with the wordmark. */
-  stroke-dasharray: 1;
-  animation: first-launch-wordmark-draw 1000ms ease-out both;
-}
-
-[data-component="first-launch-splash"][data-drawing="pending"] .startup-brand-wordmark path {
+[data-component="first-launch-splash"][data-drawing="pending"] .startup-brand-mark {
   animation-play-state: paused;
 }
 
-@keyframes first-launch-wordmark-draw {
+@keyframes first-launch-logo-reveal {
   from {
-    stroke-dashoffset: 1;
+    opacity: 0;
   }
   to {
-    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-component="first-launch-splash"] .startup-brand-wordmark path {
+  [data-component="first-launch-splash"] .startup-brand-mark {
     animation: none;
-    stroke-dasharray: none;
   }
 }

@@ -1,7 +1,6 @@
 import { Splash } from "@opencode/ui/logo"
-import { Wordmark } from "@opencode/ui/wordmark"
 import type { Platform } from "@opencode/app/desktop"
-import { onCleanup, onMount, Show } from "solid-js"
+import { onCleanup, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
 import wallpaper from "./assets/wallhaven-5ypy88.jpg"
 import "./splash.css"
@@ -51,18 +50,12 @@ export function LoadingSplash(props: {
       class="startup-wallpaper-splash"
       aria-hidden="true"
       onAnimationEnd={(event) => {
-        if (props.firstLaunch && event.animationName === "first-launch-wordmark-draw") props.onDrawEnd()
+        if (props.firstLaunch && event.animationName === "first-launch-logo-reveal") props.onDrawEnd()
       }}
     >
       <img class="startup-wallpaper" src={wallpaper} alt="" decoding="async" onLoad={imageReady} onError={imageReady} />
       <div class="startup-brand">
         <Splash class="startup-brand-mark" />
-        <Show
-          when={props.firstLaunch}
-          fallback={<Wordmark fade={false} muted={false} class="startup-brand-wordmark" />}
-        >
-          <Wordmark outline fade={false} muted={false} class="startup-brand-wordmark" />
-        </Show>
       </div>
     </div>
   )
